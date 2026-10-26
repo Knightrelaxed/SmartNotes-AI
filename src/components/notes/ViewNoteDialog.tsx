@@ -118,12 +118,12 @@ export function ViewNoteDialog({
 
 ---
 
-## 📌 Ringkasan Perkuliahan (AI)
+## 📌 Ringkasan AI
 ${plainSummary || '*(Belum ada ringkasan)*'}
 
 ---
 
-## 📝 Transkrip Kuliah Lengkap
+## 📝 Transkrip Lengkap
 ${note.content || '*(Transkrip kosong)*'}
 `;
 
@@ -331,7 +331,7 @@ ${note.content}
               value="transkrip"
               className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
             >
-              Transkrip Kuliah
+              Transkrip Lengkap
             </TabsTrigger>
             <TabsTrigger
               value="chat"

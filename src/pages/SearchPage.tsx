@@ -133,7 +133,7 @@ export function SearchPage() {
           Cari Catatan
         </h1>
         <p className="text-gray-500 dark:text-gray-400">
-          Temukan kata kunci dalam semua catatan kuliah Anda secara instan
+          Temukan topik dan kata kunci dalam semua catatan Anda secara instan
         </p>
       </div>
 

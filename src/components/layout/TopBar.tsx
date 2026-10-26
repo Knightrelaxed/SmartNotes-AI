@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import AdminUserMenu from './AdminUserMenu';
 
 const PAGE_INFO: Record<string, { title: string; subtitle: string }> = {
-  record: { title: 'Rekam Kuliah', subtitle: 'Transkripsi langsung & ringkasan' },
+  record: { title: 'Rekam Audio', subtitle: 'Transkripsi langsung & ringkasan' },
   notes: { title: 'Catatan Saya', subtitle: 'Daftar materi tersimpan' },
   search: { title: 'Pencarian Cerdas', subtitle: 'Cari catatan, topik & kata kunci' },
   stats: { title: 'Statistik Belajar', subtitle: 'Grafik & tren aktivitas' },
@@ -28,7 +28,7 @@ export function TopBar() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
             </span>
-            <span className="text-xs font-semibold uppercase tracking-wider">Merekam Kuliah</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Merekam Audio</span>
           </div>
         );
       case 'paused':

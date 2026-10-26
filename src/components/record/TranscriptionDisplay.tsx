@@ -128,10 +128,10 @@ export function TranscriptionDisplay({
                     <Mic className="w-8 h-8" />
                   </div>
                   <h4 className="font-semibold text-base text-gray-900 dark:text-white mb-1">
-                    Siap Mentranskripsi Perkuliahan
+                    Siap Mentranskripsi Audio
                   </h4>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">
-                    Ucapkan materi kuliah atau putar audio perkuliahan. Gemini 3.5 Live akan menyalin langsung dengan tanda baca akurat.
+                    Bicaralah ke mikrofon atau putar audio perkuliahan, rapat, atau percakapan. Gemini 3.5 Live akan menyalin langsung dengan tanda baca akurat.
                   </p>
                   {onStartRecord && (
                     <Button

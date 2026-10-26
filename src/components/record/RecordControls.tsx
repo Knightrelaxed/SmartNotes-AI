@@ -233,7 +233,7 @@ export function RecordControls({
                   className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] hover:opacity-95 text-white px-8 py-6 text-base font-semibold shadow-lg shadow-[#6C63FF]/25 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Mic className="w-5 h-5 mr-2 animate-pulse" />
-                  Mulai Rekam Kuliah
+                  Mulai Merekam
                 </Button>
               ) : state === 'recording' ? (
                 <>

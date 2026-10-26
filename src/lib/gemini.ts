@@ -80,14 +80,14 @@ export const processTranscriptionWithAI = async (
 
     // Siapkan struktur JSON dinamis sesuai dengan opsi yang diminta user
     const requestedFields: string[] = [];
-    requestedFields.push(`"title": "Judul topik materi kuliah yang singkat, padat, dan deskriptif (3-6 kata)"`);
+    requestedFields.push(`"title": "Judul topik pembahasan yang singkat, padat, dan deskriptif sesuai inti pembicaraan (3-6 kata, jangan gunakan awalan kata 'Catatan')"` );
     if (generateSummary) requestedFields.push(`"summary": "Berikan ringkasan 3-5 kalimat dari transkripsi"`);
     if (extractKeywords) requestedFields.push(`"keywords": ["kata kunci 1", "kata kunci 2", "maksimal 10 kata kunci"]`);
     if (createOutline) requestedFields.push(`"outline": ["Poin utama 1", "Poin utama 2", "maksimal 7 poin"]`);
     if (generateFlashcards) requestedFields.push(`"flashcards": [{"question": "pertanyaan", "answer": "jawaban"}] // buat 5 flashcards`);
 
     // GABUNGKAN SEMUA PERINTAH DALAM SATU PROMPT (Satu kali request untuk menghemat kuota / Rate Limit 429)
-    const masterPrompt = `Analisis transkripsi kuliah berikut dalam ${langName}.
+    const masterPrompt = `Analisis transkripsi audio/rekaman pembicaraan berikut dalam ${langName}.
 Berikan balasan HANYA dalam format JSON murni tanpa tambahan teks apapun.
 Struktur JSON yang WAJIB kamu hasilkan:
 {
@@ -145,7 +145,7 @@ export const correctTranscription = async (
   try {
     const langName = language === 'id' ? 'Bahasa Indonesia' : 'English';
     
-    const prompt = `Perbaiki dan format transkripsi kuliah berikut dalam ${langName}.
+    const prompt = `Perbaiki dan format transkripsi audio/rekaman berikut dalam ${langName}.
 Tambahkan tanda baca yang tepat, perbaiki kesalahan ejaan, dan format menjadi paragraf yang rapi.
 JANGAN mengubah makna atau menambahkan informasi baru.
 
@@ -203,7 +203,7 @@ export const streamTranscriptionCorrection = async (
   }
 
     const langName = language === 'id' ? 'Bahasa Indonesia' : 'English';
-    const prompt = `Perbaiki dan format transkripsi kuliah berikut dalam ${langName}.
+    const prompt = `Perbaiki dan format transkripsi audio/rekaman berikut dalam ${langName}.
 Tambahkan tanda baca yang tepat dan perbaiki kesalahan ejaan.
 
 Transkripsi:
@@ -241,7 +241,7 @@ export const askQuestionAboutNotes = async (
   try {
     const langName = language === 'id' ? 'Bahasa Indonesia' : 'English';
     
-    const prompt = `Berdasarkan catatan kuliah berikut, jawab pertanyaan yang diajukan dalam ${langName}.
+    const prompt = `Berdasarkan catatan atau transkripsi rekaman berikut, jawab pertanyaan yang diajukan dalam ${langName}.
 
 Catatan:
 """
