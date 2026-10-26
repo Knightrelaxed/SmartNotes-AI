@@ -316,12 +316,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       };
       const sampleRate = sampleRateMap[audioSettings.quality] || 44100;
 
-      // Request microphone stream
+      // Request microphone stream with high-sensitivity constraints
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: audioSettings.noiseReduction,
-          autoGainControl: audioSettings.autoGainControl,
+          autoGainControl: true,
           sampleRate: sampleRate,
           sampleSize: 16,
           channelCount: 1,

@@ -147,10 +147,10 @@ export class AudioPCMStreamer {
   }
 
   /**
-   * Flush residual audio buffer (at least 25ms) so trailing syllables aren't lost
+   * Flush residual audio buffer so trailing syllables are never lost
    */
   private flushRemainingBuffer(): void {
-    if (this.sampleBuffer.length >= 400 && this.onChunkCallback) {
+    if (this.sampleBuffer.length > 0 && this.onChunkCallback) {
       const pcm16Buffer = this.processFloatTo16BitPCM(this.sampleBuffer);
       const base64Data = this.arrayBufferToBase64(pcm16Buffer);
       if (base64Data) {
@@ -198,7 +198,9 @@ export class AudioPCMStreamer {
   }
 
   /**
-   * Convert Float32Array to 16-bit Linear PCM with Noise Gate & Adaptive Gain Control (AGC)
+   * Convert Float32Array to 16-bit Linear PCM with High Sensitivity AGC & Gentle Limiter.
+   * Engineered to capture soft whispers, quiet consonants, and trailing word endings
+   * so not a single word is left behind or missed.
    */
   private processFloatTo16BitPCM(input: Float32Array): ArrayBuffer {
     let peak = 0;
@@ -207,25 +209,26 @@ export class AudioPCMStreamer {
       if (abs > peak) peak = abs;
     }
 
-    // 1. Intelligent Noise Gate:
-    // If peak < 0.0035 (ambient room hiss/aircon/silence), emit clean zeros.
-    // This tells Google's VAD that user has paused, cleanly closing segments
-    // and completely eliminating background hallucinations (Arabic, Hindi, etc.)
-    if (peak < 0.0035) {
+    // 1. Ultra-sensitive noise threshold:
+    // Only zero out if the audio is virtually dead silence (< 0.0008, i.e. < -62 dBFS).
+    // This ensures even the faintest whispers, soft consonants (s, f, th, h),
+    // and trailing word endings are never cut off or dropped!
+    if (peak < 0.0008) {
       return new Int16Array(input.length).buffer;
     }
 
-    // 2. Adaptive Gain Booster:
-    // Target healthy speech level (around 0.65 peak)
-    // Max boost of 3.5x to ensure whisper/quiet laptop mics are crystal clear
+    // 2. High-Sensitivity Adaptive Gain Booster:
+    // Target healthy speech level (around 0.70 peak).
+    // Dynamic boost up to 6.0x (approx +16dB) so quiet microphones and soft speech
+    // are amplified into the prime acoustic detection range for Gemini Live.
     let gain = 1.0;
-    if (peak < 0.25) {
-      gain = Math.min(3.5, 0.65 / Math.max(peak, 0.01));
+    if (peak < 0.35) {
+      gain = Math.min(6.0, 0.70 / Math.max(peak, 0.008));
     } else if (peak > 0.85) {
-      gain = 0.85 / peak; // Soft attenuation for loud sounds
+      gain = 0.85 / peak; // Soft attenuation for loud sounds to prevent clipping
     }
 
-    // 3. Convert to 16-bit Signed Integer PCM Little-Endian with soft saturation
+    // 3. Convert to 16-bit Signed Integer PCM Little-Endian with soft saturation curve
     const pcm16 = new Int16Array(input.length);
     for (let i = 0; i < input.length; i++) {
       let s = input[i] * gain;
