@@ -1,6 +1,9 @@
-import { Mic, Pause, Play, Square, Sparkles, Radio } from 'lucide-react';
+import { useState } from 'react';
+import { Mic, Pause, Play, Square, Sparkles, Radio, Plus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AudioVisualizer } from './AudioVisualizer';
 import { formatDuration } from '@/utils/formatters';
@@ -13,6 +16,7 @@ interface RecordControlsProps {
   currentSubject: string;
   subjects: Subject[];
   onSelectSubject: (subject: string) => void;
+  onAddSubject?: (name: string, color?: string) => void;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
@@ -27,6 +31,7 @@ export function RecordControls({
   currentSubject,
   subjects,
   onSelectSubject,
+  onAddSubject,
   onStart,
   onPause,
   onResume,
@@ -34,6 +39,15 @@ export function RecordControls({
   engine = 'gemini-live',
   isLiveConnected = false,
 }: RecordControlsProps) {
+  const [isAddingSubject, setIsAddingSubject] = useState(false);
+  const [newSubjectName, setNewSubjectName] = useState('');
+
+  const handleCreateSubject = () => {
+    if (!newSubjectName.trim()) return;
+    onAddSubject?.(newSubjectName.trim());
+    setNewSubjectName('');
+    setIsAddingSubject(false);
+  };
   return (
     <>
       {/* Status & Subject Header Card */}
@@ -118,41 +132,84 @@ export function RecordControls({
                 </div>
               )}
 
-              <Select
-                value={currentSubject}
-                onValueChange={onSelectSubject}
-                disabled={state !== 'idle' || subjects.length === 0}
-              >
-                <SelectTrigger className="w-[200px] bg-white dark:bg-gray-800">
-                  <SelectValue placeholder={subjects.length === 0 ? "Belum ada mata kuliah" : "Pilih mata kuliah"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.length > 0 ? (
-                    subjects.map((subject) => (
-                      <SelectItem key={subject.id} value={subject.name}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className="w-2 h-2 rounded-full inline-block"
-                            style={{ backgroundColor: subject.color }}
-                          />
-                          {subject.name}
-                        </span>
-                      </SelectItem>
-                    ))
-                  ) : null}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={currentSubject}
+                  onValueChange={onSelectSubject}
+                  disabled={state !== 'idle' || subjects.length === 0}
+                >
+                  <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800">
+                    <SelectValue placeholder={subjects.length === 0 ? "Belum ada mata kuliah" : "Pilih mata kuliah"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subjects.length > 0 ? (
+                      subjects.map((subject) => (
+                        <SelectItem key={subject.id} value={subject.name}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="w-2 h-2 rounded-full inline-block"
+                              style={{ backgroundColor: subject.color }}
+                            />
+                            {subject.name}
+                          </span>
+                        </SelectItem>
+                      ))
+                    ) : null}
+                  </SelectContent>
+                </Select>
+
+                {onAddSubject && state === 'idle' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsAddingSubject(true)}
+                    className="h-10 px-2.5 text-xs text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:text-[#6C63FF]"
+                    title="Tambah Mata Kuliah Baru"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Mata Kuliah
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Sticky Bottom Control Panel */}
-      <Card className="border-0 shadow-lg sticky bottom-4 md:bottom-6 z-10">
+      {/* Modal Quick Add Mata Kuliah */}
+      <Dialog open={isAddingSubject} onOpenChange={setIsAddingSubject}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Tambah Mata Kuliah Baru</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Nama Mata Kuliah
+            </label>
+            <Input
+              value={newSubjectName}
+              onChange={(e) => setNewSubjectName(e.target.value)}
+              placeholder="Contoh: Algoritma & Pemrograman"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateSubject();
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsAddingSubject(false)}>Batal</Button>
+            <Button onClick={handleCreateSubject} className="bg-[#6C63FF] hover:bg-[#5b52e0] text-white">
+              Simpan & Pilih
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sticky Bottom Control Panel (elevated on mobile so it is not hidden by MobileNav) */}
+      <Card className="border-0 shadow-lg sticky bottom-20 md:bottom-6 z-10 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md">
         <CardContent className="p-4 md:p-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Visualizer */}
-            <div className="hidden md:block w-48">
+            {/* Visualizer (visible on both mobile and desktop) */}
+            <div className="w-full md:w-48 flex justify-center md:justify-start">
               {state === 'recording' ? (
                 <AudioVisualizer />
               ) : (
@@ -173,10 +230,10 @@ export function RecordControls({
                 <Button
                   onClick={onStart}
                   size="lg"
-                  className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] hover:opacity-90 text-white px-8"
+                  className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] hover:opacity-95 text-white px-8 py-6 text-base font-semibold shadow-lg shadow-[#6C63FF]/25 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <Mic className="w-5 h-5 mr-2" />
-                  Mulai Rekam
+                  <Mic className="w-5 h-5 mr-2 animate-pulse" />
+                  Mulai Rekam Kuliah
                 </Button>
               ) : state === 'recording' ? (
                 <>

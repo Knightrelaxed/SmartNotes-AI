@@ -7,7 +7,6 @@ import {
   X,
   History,
   Sparkles,
-  Filter,
 } from 'lucide-react';
 import { useNotesStore } from '@/store/notesStore';
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,6 +41,10 @@ export function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [viewingNote, setViewNote] = useState<Note | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const popularKeywords = Array.from(
+    new Set(notes.flatMap((n) => n.keywords || []))
+  ).slice(0, 10);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -268,48 +271,60 @@ export function SearchPage() {
         )}
       </AnimatePresence>
 
-      {/* Quick Search Features Preview */}
+      {/* Functional Empty State: Recent Notes & Popular Keywords */}
       {!query && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-4"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
         >
-          <Card className="border-0 shadow-md bg-gradient-to-br from-[#6C63FF]/5 to-[#6C63FF]/10">
-            <CardContent className="p-4">
-              <Sparkles className="w-8 h-8 text-[#6C63FF] mb-3" />
-              <h3 className="font-medium text-gray-900 dark:text-white mb-1">
-                Pencarian Cerdas
+          {/* Recent Notes */}
+          {notes.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider">
+                Catatan Terbaru
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Cari dalam judul dan konten semua catatan Anda secara instan
-              </p>
-            </CardContent>
-          </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {notes.slice(0, 4).map((note) => (
+                  <div
+                    key={note.id}
+                    onClick={() => setViewNote(note)}
+                    className="p-4 rounded-2xl bg-white/70 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800 hover:border-[#6C63FF]/40 hover:shadow-sm cursor-pointer transition-all flex items-center justify-between group"
+                  >
+                    <div className="min-w-0 flex-1 pr-3">
+                      <p className="font-medium text-sm text-gray-900 dark:text-white truncate group-hover:text-[#6C63FF] transition-colors">
+                        {note.title}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1 truncate">
+                        {note.subject ? `${note.subject} • ` : ''}{formatDate(note.createdAt, 'd MMM yyyy')}
+                      </p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-[#6C63FF] group-hover:translate-x-1 transition-all flex-shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <Card className="border-0 shadow-md bg-gradient-to-br from-[#FF6584]/5 to-[#FF6584]/10">
-            <CardContent className="p-4">
-              <Filter className="w-8 h-8 text-[#FF6584] mb-3" />
-              <h3 className="font-medium text-gray-900 dark:text-white mb-1">
-                Filter Otomatis
+          {/* Popular Keywords */}
+          {popularKeywords.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 mb-3 uppercase tracking-wider">
+                Topik & Kata Kunci Populer
               </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Pencocokan langsung pada mata kuliah dan transkripsi suara
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md bg-gradient-to-br from-[#4CAF50]/5 to-[#4CAF50]/10">
-            <CardContent className="p-4">
-              <History className="w-8 h-8 text-[#4CAF50] mb-3" />
-              <h3 className="font-medium text-gray-900 dark:text-white mb-1">
-                Riwayat Pencarian
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Akses cepat pencarian sebelumnya dengan satu klik
-              </p>
-            </CardContent>
-          </Card>
+              <div className="flex flex-wrap gap-2">
+                {popularKeywords.map((kw, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setQuery(kw)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-[#6C63FF]/10 text-[#6C63FF] hover:bg-[#6C63FF]/20 transition-colors flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3 h-3" /> #{kw}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
 

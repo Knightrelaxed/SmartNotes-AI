@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Type, Clock, Wand2 } from 'lucide-react';
+import { Type, Clock, Wand2, Mic } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDuration } from '@/utils/formatters';
@@ -16,6 +16,7 @@ interface TranscriptionDisplayProps {
   lastAutoSave: Date | null;
   isAIProcessing: boolean;
   onCorrectText: () => void;
+  onStartRecord?: () => void;
 }
 
 export function TranscriptionDisplay({
@@ -27,6 +28,7 @@ export function TranscriptionDisplay({
   lastAutoSave,
   isAIProcessing,
   onCorrectText,
+  onStartRecord,
 }: TranscriptionDisplayProps) {
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const transcriptionRef = useRef<HTMLDivElement>(null);
@@ -121,11 +123,27 @@ export function TranscriptionDisplay({
                   <p className="text-xs text-gray-400 mt-1">Bicaralah ke mikrofon atau putar audio perkuliahan</p>
                 </>
               ) : (
-                <>
-                  <Type className="w-12 h-12 mb-4 opacity-50" />
-                  <p>Transkripsi akan muncul di sini</p>
-                  <p className="text-sm">Klik tombol rekam untuk memulai</p>
-                </>
+                <div className="flex flex-col items-center justify-center h-full text-center px-4 max-w-sm mx-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-[#6C63FF]/10 text-[#6C63FF] flex items-center justify-center mb-4 shadow-sm">
+                    <Mic className="w-8 h-8" />
+                  </div>
+                  <h4 className="font-semibold text-base text-gray-900 dark:text-white mb-1">
+                    Siap Mentranskripsi Perkuliahan
+                  </h4>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">
+                    Ucapkan materi kuliah atau putar audio perkuliahan. Gemini 3.5 Live akan menyalin langsung dengan tanda baca akurat.
+                  </p>
+                  {onStartRecord && (
+                    <Button
+                      onClick={onStartRecord}
+                      size="default"
+                      className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] hover:opacity-90 text-white shadow-md shadow-[#6C63FF]/20 px-6 font-medium rounded-xl flex items-center gap-2 group transition-all"
+                    >
+                      <Mic className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                      Mulai Rekam Sekarang
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           )}

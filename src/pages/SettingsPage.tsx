@@ -15,6 +15,7 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useNotesStore } from '@/store/notesStore';
@@ -296,20 +297,21 @@ ${note.content}
 
         <SettingItem
           label="Auto-save Interval"
-          description="Simpan draf transkripsi otomatis saat sedang merekam"
+          description="Simpan draf transkripsi otomatis saat sedang merekam ke penyimpanan browser"
         >
           <Select
             value={interfaceSettings.autoSaveInterval.toString()}
             onValueChange={(v: string) => updateInterface({ autoSaveInterval: parseInt(v) })}
           >
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-[180px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="5">5 menit</SelectItem>
-              <SelectItem value="10">10 menit</SelectItem>
-              <SelectItem value="30">30 menit</SelectItem>
-              <SelectItem value="60">60 menit</SelectItem>
+              <SelectItem value="30">30 detik (Rekomendasi)</SelectItem>
+              <SelectItem value="60">1 menit</SelectItem>
+              <SelectItem value="120">2 menit</SelectItem>
+              <SelectItem value="300">5 menit</SelectItem>
+              <SelectItem value="600">10 menit</SelectItem>
             </SelectContent>
           </Select>
         </SettingItem>
@@ -332,7 +334,7 @@ ${note.content}
           />
           <RadioOption
             label="Google Gemini"
-            description="Model Gemini 2.0 Flash langsung dari Google AI Studio. Cepat dan akurat."
+            description="Model Gemini 3.5 Flash Lite langsung dari Google AI Studio. Sangat cepat, hemat kuota, dan akurat."
             selected={ai.engine === 'gemini'}
             onClick={() => updateAI({ engine: 'gemini' })}
           />
@@ -556,36 +558,63 @@ ${note.content}
 
           <Button
             variant="outline"
-            className="w-full justify-between text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/20"
-            onClick={() => setShowClearNotesConfirm(true)}
-          >
-            <span className="flex items-center gap-2">
-              <Trash2 className="w-4 h-4" />
-              Bersihkan Cache Catatan Lokal
-            </span>
-            <span className="text-xs">{notes.length} catatan</span>
-          </Button>
-
-          <Button
-            variant="outline"
             className="w-full justify-between text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-950/20"
             onClick={handleClearCacheAndReload}
           >
             <span className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              Bersihkan Cache PWA & Muat Ulang Versi Terbaru
+              Perbarui Versi Aplikasi & Bersihkan Cache PWA
             </span>
             <span className="text-xs">Update Paksa</span>
           </Button>
+        </div>
+      </SettingsSection>
 
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+      {/* Danger Zone */}
+      <SettingsSection
+        title="Zona Bahaya"
+        description="Aksi destruktif berikut tidak dapat dibatalkan. Harap berhati-hati."
+        icon={AlertTriangle}
+        delay={0.45}
+      >
+        <div className="space-y-3 p-4 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/30 dark:bg-red-950/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm text-gray-900 dark:text-white">
+                Bersihkan Cache Catatan Lokal
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Hapus semua catatan tersimpan lokal di browser ini ({notes.length} catatan)
+              </p>
+            </div>
             <Button
               variant="outline"
-              className="w-full text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 border-red-200 dark:border-red-900/50"
+              size="sm"
+              className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-950/40"
+              onClick={() => setShowClearNotesConfirm(true)}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              Bersihkan
+            </Button>
+          </div>
+
+          <div className="pt-3 border-t border-red-100 dark:border-red-900/30 flex items-center justify-between">
+            <div>
+              <p className="font-medium text-sm text-red-600 dark:text-red-400">
+                Kembalikan ke Pengaturan Awal
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Reset semua preferensi audio, transkripsi, dan API Key ke konfigurasi bawaan
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 dark:text-red-400 border-red-300 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-950/40"
               onClick={() => setShowResetConfirm(true)}
             >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Kembalikan ke Pengaturan Awal
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+              Reset
             </Button>
           </div>
         </div>

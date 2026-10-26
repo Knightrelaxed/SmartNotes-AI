@@ -28,7 +28,7 @@ const defaultSettings: AppSettings = {
   interface: {
     theme: 'auto',
     language: 'id',
-    autoSaveInterval: 10, // in minutes
+    autoSaveInterval: 30, // in seconds (30s default)
     saveLocation: undefined,
   },
 };

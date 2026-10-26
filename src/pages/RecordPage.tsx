@@ -26,7 +26,7 @@ export function RecordPage() {
     addSegment,
   } = useRecordStore();
 
-  const { addNote, updateNote, subjects } = useNotesStore();
+  const { addNote, updateNote, addSubject, subjects } = useNotesStore();
   const { addToast, setCurrentPage } = useUIStore();
   const {
     startRecording,
@@ -85,7 +85,8 @@ export function RecordPage() {
 
     if (state !== 'recording' && state !== 'paused') return;
 
-    const intervalMs = autoSaveInterval * 60 * 1000;
+    // autoSaveInterval is in seconds (or minutes for legacy values < 30)
+    const intervalMs = autoSaveInterval >= 30 ? autoSaveInterval * 1000 : autoSaveInterval * 60 * 1000;
     autoSaveTimerRef.current = setInterval(() => {
       const text = getFullTranscription();
       if (!text.trim()) return;
@@ -286,6 +287,11 @@ export function RecordPage() {
         currentSubject={currentSubject}
         subjects={subjects}
         onSelectSubject={setCurrentSubject}
+        onAddSubject={(name) => {
+          addSubject({ name, color: '#6C63FF' });
+          setCurrentSubject(name);
+          addToast({ type: 'success', message: `Mata kuliah "${name}" ditambahkan!` });
+        }}
         onStart={handleStart}
         onPause={pauseRecording}
         onResume={resumeRecording}
@@ -304,6 +310,7 @@ export function RecordPage() {
         lastAutoSave={lastAutoSave}
         isAIProcessing={isAIProcessing}
         onCorrectText={handleCorrectText}
+        onStartRecord={startRecording}
       />
 
       {/* Save Note Dialog */}
