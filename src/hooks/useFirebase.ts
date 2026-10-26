@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   onUserAuthStateChanged,
   subscribeToNotes,
@@ -43,7 +43,7 @@ export function useFirebase(): UseFirebaseReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<FirebaseNote[]>([]);
-  const [notesUnsubscribe, setNotesUnsubscribe] = useState<(() => void) | null>(null);
+  const notesUnsubscribeRef = useRef<(() => void) | null>(null);
   
   const { addToast } = useUIStore();
   const isConfigured = isFirebaseConfigured();
@@ -101,8 +101,8 @@ export function useFirebase(): UseFirebaseReturn {
     }
 
     // Unsubscribe from previous subscription
-    if (notesUnsubscribe) {
-      notesUnsubscribe();
+    if (notesUnsubscribeRef.current) {
+      notesUnsubscribeRef.current();
     }
 
     // Subscribe to notes
@@ -126,10 +126,11 @@ export function useFirebase(): UseFirebaseReturn {
       }
     });
 
-    setNotesUnsubscribe(() => unsubscribe);
+    notesUnsubscribeRef.current = unsubscribe;
 
     return () => {
       unsubscribe();
+      notesUnsubscribeRef.current = null;
     };
   }, [isConfigured]);
 
@@ -198,8 +199,8 @@ export function useFirebase(): UseFirebaseReturn {
     }
 
     // Re-subscribe to trigger fresh data
-    if (notesUnsubscribe) {
-      notesUnsubscribe();
+    if (notesUnsubscribeRef.current) {
+      notesUnsubscribeRef.current();
     }
 
     const unsubscribe = subscribeToNotes((newNotes) => {
@@ -213,8 +214,8 @@ export function useFirebase(): UseFirebaseReturn {
       useNotesStore.getState().setNotes(appNotes);
     });
 
-    setNotesUnsubscribe(() => unsubscribe);
-  }, [isConfigured, notesUnsubscribe]);
+    notesUnsubscribeRef.current = unsubscribe;
+  }, [isConfigured]);
 
   // Create transcription session
   const createSession = useCallback(async (subject: string): Promise<string | null> => {

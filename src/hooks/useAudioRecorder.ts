@@ -51,6 +51,17 @@ declare global {
   }
 }
 
+// Language mapping: settings code → BCP-47 locale for Web Speech API
+const LANG_MAP: Record<string, string> = {
+  id: 'id-ID',
+  en: 'en-US',
+};
+
+function getRecognitionLang(): string {
+  const lang = useSettingsStore.getState().transcription.language;
+  return LANG_MAP[lang] ?? 'id-ID';
+}
+
 interface UseAudioRecorderReturn {
 
   isSupported: boolean;
@@ -80,18 +91,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const startSpeechRecognitionRef = useRef<() => void>(() => {});
   
   const { setAudioLevel, addSegment, updateCurrentText } = useRecordStore();
-
-  // Language mapping: settings code → BCP-47 locale for Web Speech API
-  const LANG_MAP: Record<string, string> = {
-    id: 'id-ID',
-    en: 'en-US',
-  };
-
-  const getRecognitionLang = () => {
-    const lang = useSettingsStore.getState().transcription.language;
-    return LANG_MAP[lang] ?? 'id-ID';
-  };
-
 
   // Check for browser support
   useEffect(() => {
@@ -423,7 +422,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {
+      } catch {
         // Ignore
       }
       recognitionRef.current = null;

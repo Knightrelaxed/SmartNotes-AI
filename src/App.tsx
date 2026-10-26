@@ -1,4 +1,4 @@
-import { Layout } from '@/components/Layout';
+import { Layout } from '@/components/layout';
 import { RecordPage } from '@/pages/RecordPage';
 import { NotesPage } from '@/pages/NotesPage';
 import { SearchPage } from '@/pages/SearchPage';
