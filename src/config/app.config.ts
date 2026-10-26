@@ -16,7 +16,7 @@ export const firebaseConfig = {
 // Gemini AI Configuration
 export const geminiConfig = {
   apiKey: import.meta.env.VITE_GEMINI_API_KEY || "", // Legacy fallback dirutek ke env
-  model: "gemini-2.0-flash",  // Fast, modern, and widely supported model
+  model: "gemini-3.5-flash-lite",  // Ultra-fast, lightweight, and modern Gemini model
   baseUrl: "https://generativelanguage.googleapis.com/v1beta",
   
   // Default generation config

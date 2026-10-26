@@ -25,20 +25,44 @@ export class AIManager {
     const secondaryGeminiKey = aiProvidersConfig.gemini[1]?.key;
     const openrouterKey = userSettings.openrouterApiKey?.trim() || aiProvidersConfig.openrouter?.key;
 
+    const candidateModels = [
+      geminiConfig.model || 'gemini-3.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+    ];
+
     // 1. Primary Gemini
     if (primaryGeminiKey) {
       const genAI = new GoogleGenerativeAI(primaryGeminiKey);
-      const model = genAI.getGenerativeModel({
-        model: geminiConfig.model || 'gemini-2.0-flash',
-        generationConfig: geminiConfig.generationConfig,
-      });
       this.providers.set('gemini_primary', {
         id: 'gemini_primary',
         generateContent: async (prompt) => {
-          const res = await model.generateContent(prompt);
-          return res.response.text();
+          let lastErr: any = null;
+          for (const modelName of candidateModels) {
+            try {
+              const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: geminiConfig.generationConfig,
+              });
+              const res = await model.generateContent(prompt);
+              return res.response.text();
+            } catch (err: any) {
+              lastErr = err;
+              const msg = (err?.message || '').toLowerCase();
+              if (msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')) {
+                console.warn(`[AIManager] Model ${modelName} unavailable, trying next candidate...`);
+                continue;
+              }
+              throw err;
+            }
+          }
+          throw lastErr;
         },
         generateContentStream: async (prompt) => {
+          const model = genAI.getGenerativeModel({
+            model: candidateModels[0],
+            generationConfig: geminiConfig.generationConfig,
+          });
           return await model.generateContentStream(prompt);
         }
       });
@@ -47,17 +71,35 @@ export class AIManager {
     // 2. Secondary Gemini
     if (secondaryGeminiKey) {
       const genAI = new GoogleGenerativeAI(secondaryGeminiKey);
-      const model = genAI.getGenerativeModel({
-        model: geminiConfig.model || 'gemini-2.0-flash',
-        generationConfig: geminiConfig.generationConfig,
-      });
       this.providers.set('gemini_secondary', {
         id: 'gemini_secondary',
         generateContent: async (prompt) => {
-          const res = await model.generateContent(prompt);
-          return res.response.text();
+          let lastErr: any = null;
+          for (const modelName of candidateModels) {
+            try {
+              const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: geminiConfig.generationConfig,
+              });
+              const res = await model.generateContent(prompt);
+              return res.response.text();
+            } catch (err: any) {
+              lastErr = err;
+              const msg = (err?.message || '').toLowerCase();
+              if (msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')) {
+                console.warn(`[AIManager] Model ${modelName} unavailable on secondary, trying next...`);
+                continue;
+              }
+              throw err;
+            }
+          }
+          throw lastErr;
         },
         generateContentStream: async (prompt) => {
+          const model = genAI.getGenerativeModel({
+            model: candidateModels[0],
+            generationConfig: geminiConfig.generationConfig,
+          });
           return await model.generateContentStream(prompt);
         }
       });
