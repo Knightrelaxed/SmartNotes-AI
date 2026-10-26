@@ -3,7 +3,6 @@ import { Clock, FileText, BookOpen, TrendingUp } from 'lucide-react';
 import { useNotesStore } from '@/store/notesStore';
 import { format, isSameDay } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { formatHours } from '@/utils/formatters';
 import { StatCard } from '@/components/stats/StatCard';
 import { ActivityCalendar } from '@/components/stats/ActivityCalendar';
 import { StudyCharts } from '@/components/stats/StudyCharts';
@@ -15,7 +14,7 @@ export function StatsPage() {
   const stats = useMemo(() => {
     const totalDuration = notes.reduce((sum, n) => sum + n.duration, 0);
     const totalNotes = notes.length;
-    const totalCourses = new Set(notes.map((n) => n.subject)).size;
+    const totalCourses = new Set(notes.map((n) => n.subject).filter(Boolean)).size;
     const totalWords = notes.reduce((sum, n) => sum + n.wordCount, 0);
 
     // Weekly data (last 7 days)
@@ -49,8 +48,8 @@ export function StatsPage() {
     const wordCountTrend = notes
       .slice(0, 10)
       .reverse()
-      .map((n) => ({
-        date: format(new Date(n.createdAt), 'd MMM', { locale: id }),
+      .map((n, idx) => ({
+        date: notes.length > 5 ? `#${idx + 1}` : format(new Date(n.createdAt), 'd MMM HH:mm', { locale: id }),
         words: n.wordCount,
       }));
 
@@ -90,8 +89,8 @@ export function StatsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Waktu"
-          value={`${formatHours(stats.totalDuration)}j`}
-          subtitle="Jam kuliah terekam"
+          value={stats.totalDuration < 3600 ? `${Math.round(stats.totalDuration / 60)} m` : `${(stats.totalDuration / 3600).toFixed(1)} j`}
+          subtitle={stats.totalDuration < 3600 ? "Menit kuliah terekam" : "Jam kuliah terekam"}
           icon={Clock}
           color="#6C63FF"
           delay={0}

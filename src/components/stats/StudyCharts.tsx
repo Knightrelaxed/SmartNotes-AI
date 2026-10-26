@@ -53,16 +53,19 @@ export function StudyCharts({
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(156, 163, 175, 0.2)" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'white',
-                    border: 'none',
+                    backgroundColor: 'hsl(var(--card, 222 47% 11%))',
+                    border: '1px solid hsl(var(--border, 217 33% 17%))',
                     borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    color: 'hsl(var(--foreground, 210 40% 98%))',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
                   }}
+                  itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
+                  labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
                   formatter={(value: any) => [`${value} menit`, 'Durasi']}
                 />
                 <Bar dataKey="duration" fill="#6C63FF" radius={[4, 4, 0, 0]} />
@@ -97,11 +100,14 @@ export function StudyCharts({
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'white',
-                    border: 'none',
+                    backgroundColor: 'hsl(var(--card, 222 47% 11%))',
+                    border: '1px solid hsl(var(--border, 217 33% 17%))',
                     borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    color: 'hsl(var(--foreground, 210 40% 98%))',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
                   }}
+                  itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
+                  labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
                   formatter={(value: any) => [`${value} menit`, 'Durasi']}
                 />
                 <Legend />
@@ -124,20 +130,23 @@ export function StudyCharts({
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={wordCountTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(156, 163, 175, 0.2)" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'white',
-                    border: 'none',
+                    backgroundColor: 'hsl(var(--card, 222 47% 11%))',
+                    border: '1px solid hsl(var(--border, 217 33% 17%))',
                     borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    color: 'hsl(var(--foreground, 210 40% 98%))',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
                   }}
+                  itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
+                  labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
                   formatter={(value: any) => [`${value} kata`, 'Jumlah']}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="words"
                   stroke="#4CAF50"
                   strokeWidth={2}

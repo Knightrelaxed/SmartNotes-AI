@@ -59,7 +59,9 @@ export const useNotesStore = create<NotesState>()(
       clearAllNotes: () => set({ notes: [] }),
 
       addNote: (note) => {
-        const id = Date.now().toString();
+        const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : Date.now().toString() + '-' + Math.random().toString(36).substring(2, 7);
         const newNote: Note = {
           ...note,
           id,

@@ -96,10 +96,59 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const audioStreamerRef = useRef<AudioPCMStreamer | null>(null);
   const lastTranscriptRef = useRef<string>('');
   const isManuallyStoppedRef = useRef<boolean>(false);
+  const wakeLockRef = useRef<any>(null);
   const monitorAudioLevelRef = useRef<() => void>(() => {});
   const startSpeechRecognitionRef = useRef<() => void>(() => {});
 
   const { setAudioLevel, addSegment, updateCurrentText } = useRecordStore();
+
+  // Screen Wake Lock API helpers to prevent phone / laptop screen sleep during lectures
+  const requestWakeLock = useCallback(async () => {
+    try {
+      if ('wakeLock' in navigator && (navigator as any).wakeLock) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('[useAudioRecorder] Screen Wake Lock acquired.');
+      }
+    } catch (e) {
+      console.warn('[useAudioRecorder] Screen Wake Lock not supported or denied:', e);
+    }
+  }, []);
+
+  const releaseWakeLock = useCallback(() => {
+    if (wakeLockRef.current) {
+      try {
+        wakeLockRef.current.release();
+        console.log('[useAudioRecorder] Screen Wake Lock released.');
+      } catch {
+        // Ignore
+      }
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  // Prevent accidental tab closure while recording
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (useRecordStore.getState().state === 'recording') {
+        e.preventDefault();
+        e.returnValue = 'Rekaman sedang aktif. Yakin ingin menutup halaman?';
+        return 'Rekaman sedang aktif. Yakin ingin menutup halaman?';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Re-acquire screen wake lock if tab is minimized and brought back to front
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && useRecordStore.getState().state === 'recording') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [requestWakeLock]);
 
   // Check for browser support
   useEffect(() => {
@@ -384,6 +433,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       isManuallyStoppedRef.current = false;
       useRecordStore.getState().resetRecording();
       useRecordStore.getState().startRecording();
+      requestWakeLock();
 
       // Launch STT Engine
       const selectedEngine = useSettingsStore.getState().transcription.engine || 'gemini-live';
@@ -566,11 +616,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     store.finalizeSegment();
     store.stopRecording();
 
+    releaseWakeLock();
     setAudioLevel(0);
-  }, [setAudioLevel]);
+  }, [setAudioLevel, releaseWakeLock]);
 
   const pauseRecording = useCallback(() => {
     isManuallyStoppedRef.current = true;
+    releaseWakeLock();
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
@@ -598,6 +650,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   const resumeRecording = useCallback(() => {
     isManuallyStoppedRef.current = false;
+    requestWakeLock();
 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
@@ -614,11 +667,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     if (selectedEngine === 'web-speech' && isSpeechSupported) {
       startSpeechRecognition();
     }
-  }, [monitorAudioLevel, isSpeechSupported, startSpeechRecognition]);
+  }, [monitorAudioLevel, isSpeechSupported, startSpeechRecognition, requestWakeLock]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      releaseWakeLock();
       if (audioStreamerRef.current) {
         try {
           audioStreamerRef.current.stop();

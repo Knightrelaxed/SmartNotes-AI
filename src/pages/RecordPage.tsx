@@ -23,11 +23,10 @@ export function RecordPage() {
     getWordCount,
     getFullTranscription,
     resetRecording,
-    setProcessing,
     addSegment,
   } = useRecordStore();
 
-  const { addNote, subjects } = useNotesStore();
+  const { addNote, updateNote, subjects } = useNotesStore();
   const { addToast, setCurrentPage } = useUIStore();
   const {
     startRecording,
@@ -146,6 +145,22 @@ export function RecordPage() {
   };
 
   const handleStop = () => {
+    const duration = getDuration();
+    const wordCount = getWordCount();
+
+    // Prevent saving accidental ghost notes (< 5s and < 3 words)
+    if (duration < 5 && wordCount < 3) {
+      stopRecording();
+      resetRecording();
+      localStorage.removeItem('smartnotes_draft');
+      setLastAutoSave(null);
+      addToast({
+        type: 'info',
+        message: 'Rekaman terlalu singkat (< 5 detik), tidak disimpan.',
+      });
+      return;
+    }
+
     stopRecording();
     setShowSaveDialog(true);
     const defaultTitle = currentSubject
@@ -157,13 +172,38 @@ export function RecordPage() {
   const handleSave = async () => {
     if (!noteTitle.trim()) return;
 
-    setProcessing();
     const fullText = getFullTranscription();
     const duration = getDuration();
     const wordCount = getWordCount();
+    const chosenSubject = currentSubject;
+    const initialTitle = noteTitle.trim();
 
-    let aiResult;
-    let aiError = false;
+    // 1. Instantly close save dialog and reset recording state (non-blocking UX)
+    setShowSaveDialog(false);
+    resetRecording();
+    localStorage.removeItem('smartnotes_draft');
+    setLastAutoSave(null);
+
+    // 2. Save note immediately to local store
+    const baseData = {
+      title: initialTitle,
+      content: fullText,
+      subject: chosenSubject,
+      duration,
+      wordCount,
+      summary: '',
+      keywords: [],
+      outline: [],
+    };
+
+    const noteId = addNote(baseData);
+    addToast({
+      type: 'success',
+      message: 'Catatan tersimpan! Ringkasan AI diproses di latar belakang...',
+    });
+    setCurrentPage('notes');
+
+    // 3. Process AI asynchronously in the background
     const trimmedText = fullText.trim();
     const shouldUseAI =
       (ai.autoSummarize || ai.autoExtractKeywords || ai.autoCreateOutline || ai.generateFlashcards) &&
@@ -172,7 +212,7 @@ export function RecordPage() {
 
     if (shouldUseAI) {
       try {
-        aiResult = await processNote(trimmedText, {
+        const aiResult = await processNote(trimmedText, {
           generateSummary: ai.autoSummarize,
           extractKeywords: ai.autoExtractKeywords,
           createOutline: ai.autoCreateOutline,
@@ -180,57 +220,43 @@ export function RecordPage() {
           language: 'id',
         });
 
-        if (aiResult.error) {
-          aiError = true;
+        if (aiResult && !aiResult.error) {
+          // If title was default/generic, auto-update with AI title!
+          const isGenericTitle =
+            initialTitle.startsWith('Catatan -') ||
+            (chosenSubject && initialTitle === `${chosenSubject} - ${formatDate(new Date(), 'd MMMM yyyy')}`);
+
+          const finalTitle = (isGenericTitle && aiResult.title) ? aiResult.title : initialTitle;
+
+          const updatedNote = {
+            ...baseData,
+            title: finalTitle,
+            summary: aiResult.summary || '',
+            keywords: aiResult.keywords || [],
+            outline: aiResult.outline || [],
+          };
+
+          updateNote(noteId, updatedNote);
+
+          if (isFirebaseReady) {
+            saveNoteToCloud(updatedNote).catch(console.error);
+          }
+
+          addToast({
+            type: 'success',
+            message: `Ringkasan AI untuk "${finalTitle}" selesai dibuat!`,
+          });
+          return;
         }
-      } catch {
-        aiError = true;
-      }
-    } else {
-      aiError = true;
-    }
-
-    const baseData = {
-      title: noteTitle,
-      content: fullText,
-      subject: currentSubject,
-      duration,
-      wordCount,
-      summary: (!aiError && aiResult?.summary) ? aiResult.summary : '',
-      keywords: (!aiError && aiResult?.keywords && aiResult.keywords.length > 0) ? aiResult.keywords : [],
-      outline: (!aiError && aiResult?.outline && aiResult.outline.length > 0) ? aiResult.outline : [],
-    };
-
-    // Save locally first
-    addNote(baseData);
-
-    // Sync to cloud
-    if (isFirebaseReady) {
-      try {
-        await saveNoteToCloud(baseData);
       } catch (err) {
-        console.error('Failed to sync to cloud:', err);
+        console.warn('[RecordPage] Background AI processing failed:', err);
       }
     }
 
-    setShowSaveDialog(false);
-    resetRecording();
-    localStorage.removeItem('smartnotes_draft');
-    setLastAutoSave(null);
-
-    if (aiError && shouldUseAI) {
-      addToast({
-        type: 'warning',
-        message: 'Catatan disimpan! Pemrosesan AI gagal, coba proses ulang dari halaman catatan.',
-      });
-    } else {
-      addToast({
-        type: 'success',
-        message: 'Catatan berhasil disimpan!',
-      });
+    // If AI was disabled or encountered an error, sync base note to cloud
+    if (isFirebaseReady) {
+      saveNoteToCloud(baseData).catch(console.error);
     }
-
-    setCurrentPage('notes');
   };
 
   const handleDiscard = () => {

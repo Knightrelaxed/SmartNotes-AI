@@ -10,9 +10,6 @@ import {
   Save,
   Check,
   Copy,
-  BookOpen,
-  ChevronDown,
-  ChevronUp,
   Maximize2,
   Minimize2,
   Send,
@@ -27,6 +24,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAI } from '@/hooks/useAI';
+import { useNotesStore } from '@/store/notesStore';
+import { useUIStore } from '@/store/uiStore';
 import { formatDuration, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import type { Note } from '@/types';
@@ -46,14 +45,16 @@ export function ViewNoteDialog({
   defaultMode = 'view',
   onSaveSummary,
 }: ViewNoteDialogProps) {
-  const { askQuestion } = useAI();
+  const { askQuestion, processNote } = useAI();
+  const { updateNote } = useNotesStore();
+  const { addToast } = useUIStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editBuffer, setEditBuffer] = useState('');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isEditorExpanded, setIsEditorExpanded] = useState(false);
-  const [isTranscriptOpen, setIsTranscriptOpen] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [copiedTranscript, setCopiedTranscript] = useState(false);
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
@@ -146,6 +147,38 @@ ${note.content}
       .catch((err) => console.error('Failed to copy:', err));
   };
 
+  const handleReprocessAI = async () => {
+    if (!note || !note.content.trim()) return;
+    setIsReprocessing(true);
+    addToast({ type: 'info', message: 'Memproses ringkasan dan kata kunci AI...' });
+    try {
+      const res = await processNote(note.content, {
+        generateSummary: true,
+        extractKeywords: true,
+        createOutline: true,
+        generateFlashcards: false,
+        language: 'id',
+      });
+      if (res && !res.error && res.summary) {
+        const isGenericTitle = note.title.startsWith('Catatan -');
+        const finalTitle = (isGenericTitle && res.title) ? res.title : note.title;
+        updateNote(note.id, {
+          title: finalTitle,
+          summary: res.summary,
+          keywords: res.keywords || [],
+          outline: res.outline || [],
+        });
+        addToast({ type: 'success', message: 'Ringkasan AI berhasil diperbarui!' });
+      } else {
+        addToast({ type: 'error', message: res?.error || 'Gagal memproses AI.' });
+      }
+    } catch {
+      addToast({ type: 'error', message: 'Gagal memproses ulang dengan AI.' });
+    } finally {
+      setIsReprocessing(false);
+    }
+  };
+
   const handleAskAI = async (promptOverride?: string) => {
     const textToAsk = typeof promptOverride === 'string' ? promptOverride : chatInput;
     if (!textToAsk.trim() || !note) return;
@@ -198,6 +231,15 @@ ${note.content}
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={handleReprocessAI}
+                disabled={isReprocessing}
+                className="p-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:text-[#6C63FF] rounded-lg transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                title="Proses Ulang Ringkasan AI"
+              >
+                <Sparkles size={14} className={isReprocessing ? 'animate-spin text-[#6C63FF]' : 'text-[#6C63FF]'} />
+                <span className="hidden sm:inline">{isReprocessing ? 'Memproses...' : 'Proses Ulang AI'}</span>
+              </button>
+              <button
                 onClick={() => setIsFullScreen(!isFullScreen)}
                 className="p-2 bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-[#6C63FF] rounded-lg transition-colors"
                 title={isFullScreen ? 'Keluar Full Screen' : 'Full Screen'}
@@ -210,7 +252,7 @@ ${note.content}
                   className="p-2 bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-[#6C63FF] rounded-lg transition-colors flex items-center gap-2 text-xs font-bold"
                   title="Edit Ringkasan AI"
                 >
-                  <Edit2 size={16} /> <span className="hidden sm:inline">Edit AI</span>
+                  <Edit2 size={16} /> <span className="hidden sm:inline">Edit Catatan</span>
                 </button>
               )}
               <button
@@ -229,13 +271,19 @@ ${note.content}
           <TabsList className="w-full justify-start border-b border-gray-100 dark:border-gray-800 rounded-none bg-transparent h-12 p-0 mb-4 px-2 shrink-0">
             <TabsTrigger
               value="ringkasan"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
             >
-              Ringkasan
+              Ringkasan AI
+            </TabsTrigger>
+            <TabsTrigger
+              value="transkrip"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
+            >
+              Transkrip Kuliah
             </TabsTrigger>
             <TabsTrigger
               value="chat"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
             >
               Tanya AI
             </TabsTrigger>
@@ -243,6 +291,28 @@ ${note.content}
 
           <TabsContent value="ringkasan" className="flex-1 flex flex-col min-h-0 m-0 data-[state=inactive]:hidden">
             <div className="flex-1 flex flex-col overflow-y-auto py-2 pr-3 space-y-6 scrollbar-thin">
+              {!note.summary && !isEditing && (
+                <div className="flex flex-col items-center justify-center py-12 text-center p-6 bg-gray-50/70 dark:bg-gray-800/30 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                  <div className="w-12 h-12 rounded-2xl bg-[#6C63FF]/10 text-[#6C63FF] flex items-center justify-center mb-3">
+                    <Sparkles className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                    Ringkasan AI Belum Tersedia
+                  </h4>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-5">
+                    Catatan ini belum memiliki ringkasan dan kata kunci otomatis. Tekan tombol di bawah untuk memproses dengan AI.
+                  </p>
+                  <Button
+                    onClick={handleReprocessAI}
+                    disabled={isReprocessing}
+                    className="bg-[#6C63FF] hover:bg-[#5b52e0] text-white shadow-md shadow-[#6C63FF]/20"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    {isReprocessing ? 'Sedang Memproses AI...' : 'Proses Ringkasan AI Sekarang'}
+                  </Button>
+                </div>
+              )}
+
               {isEditing ? (
                 <div
                   className={cn(
@@ -362,45 +432,31 @@ ${note.content}
                 </div>
               )}
 
-              <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden mt-6 shadow-sm shrink-0">
-                <div
-                  className="flex items-center justify-between w-full p-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer group"
-                  onClick={() => setIsTranscriptOpen(!isTranscriptOpen)}
-                >
-                  <h4 className="font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-[#6C63FF]" /> Transkripsi Lengkap
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCopyText(note.content, 'transcript');
-                      }}
-                      className="p-1.5 md:p-1.5 text-gray-500 hover:text-[#6C63FF] hover:bg-[#6C63FF]/10 rounded-md transition-colors flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                      title="Salin Transkripsi"
-                    >
-                      {copiedTranscript ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-                    </button>
-                    <div className="p-1 rounded bg-white dark:bg-gray-800 shadow-sm transition-colors">
-                      {isTranscriptOpen ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
-                    </div>
-                  </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="transkrip" className="flex-1 flex flex-col min-h-0 m-0 data-[state=inactive]:hidden">
+            <div className="flex-1 flex flex-col overflow-y-auto py-2 pr-3 space-y-4 scrollbar-thin">
+              <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                  <span className="flex items-center gap-1">
+                    <Type className="w-3.5 h-3.5 text-[#6C63FF]" /> {note.wordCount} kata
+                  </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-[#6C63FF]" /> {formatDuration(note.duration)}
+                  </span>
                 </div>
-                <AnimatePresence initial={false}>
-                  {isTranscriptOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="overflow-hidden bg-white dark:bg-gray-900"
-                    >
-                      <div className="p-4 border-t border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                        {note.content}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <button
+                  onClick={() => handleCopyText(note.content, 'transcript')}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-[#6C63FF]/10 hover:text-[#6C63FF] rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  {copiedTranscript ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedTranscript ? 'Tersalin' : 'Salin Transkrip'}
+                </button>
+              </div>
+              <div className="bg-gray-50/70 dark:bg-gray-800/40 p-5 rounded-2xl border border-gray-100 dark:border-gray-800/60 text-gray-800 dark:text-gray-200 text-sm leading-relaxed whitespace-pre-wrap select-text font-normal">
+                {note.content || 'Transkripsi kosong.'}
               </div>
             </div>
           </TabsContent>

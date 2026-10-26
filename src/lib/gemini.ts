@@ -21,6 +21,7 @@ const isGeminiConfigured = () => {
 // ==================== TYPES ====================
 
 export interface AIProcessResult {
+  title?: string;
   summary: string;
   keywords: string[];
   outline: string[];
@@ -79,6 +80,7 @@ export const processTranscriptionWithAI = async (
 
     // Siapkan struktur JSON dinamis sesuai dengan opsi yang diminta user
     const requestedFields: string[] = [];
+    requestedFields.push(`"title": "Judul topik materi kuliah yang singkat, padat, dan deskriptif (3-6 kata)"`);
     if (generateSummary) requestedFields.push(`"summary": "Berikan ringkasan 3-5 kalimat dari transkripsi"`);
     if (extractKeywords) requestedFields.push(`"keywords": ["kata kunci 1", "kata kunci 2", "maksimal 10 kata kunci"]`);
     if (createOutline) requestedFields.push(`"outline": ["Poin utama 1", "Poin utama 2", "maksimal 7 poin"]`);
@@ -105,6 +107,9 @@ ${limitedTranscription}
     try {
       const parsedData = extractSafeJSON(responseText);
       
+      if (parsedData.title && typeof parsedData.title === 'string' && parsedData.title.trim()) {
+        result.title = parsedData.title.trim().replace(/^["']|["']$/g, '');
+      }
       if (generateSummary) result.summary = parsedData.summary || 'Ringkasan tidak tersedia.';
       if (extractKeywords) result.keywords = Array.isArray(parsedData.keywords) ? parsedData.keywords : [];
       if (createOutline) result.outline = Array.isArray(parsedData.outline) ? parsedData.outline : [];

@@ -422,7 +422,7 @@ ${note.content}
                 </Button>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Kunci Anda disimpan aman secara lokal di browser dan otomatis aktif saat merekam.
+                Kunci API disimpan secara lokal di perangkat Anda (localStorage) dan tidak dikirim ke server pihak ketiga.
               </p>
             </div>
 

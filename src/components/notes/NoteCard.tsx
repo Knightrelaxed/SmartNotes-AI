@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { MoreVertical, Edit2, Trash2, Calendar, Clock, Type } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, Calendar, Clock, Type, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   DropdownMenu,
@@ -36,19 +36,27 @@ export function NoteCard({ note, onView, onEdit, onDelete }: NoteCardProps) {
         <CardContent className="p-5">
           {/* Header */}
           <div className="flex items-start justify-between mb-3">
-            {note.subject ? (
-              <div className={cn(
-                'px-2.5 py-1 rounded-full text-xs font-medium',
-                'bg-[#6C63FF]/10 text-[#6C63FF]'
-              )}>
-                {note.subject}
-              </div>
-            ) : <div />}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {note.subject ? (
+                <div className={cn(
+                  'px-2.5 py-1 rounded-full text-xs font-medium',
+                  'bg-[#6C63FF]/10 text-[#6C63FF]'
+                )}>
+                  {note.subject}
+                </div>
+              ) : null}
+              {!note.summary && note.content && (
+                <div className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Transkrip
+                </div>
+              )}
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   onClick={(e) => e.stopPropagation()}
-                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Menu Opsi Catatan"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                 >
                   <MoreVertical className="w-4 h-4 text-gray-500" />
                 </button>
@@ -72,8 +80,14 @@ export function NoteCard({ note, onView, onEdit, onDelete }: NoteCardProps) {
           </h3>
 
           {/* Preview */}
-          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 mb-4">
-            {note.summary || note.content.slice(0, 150) + '...'}
+          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 mb-4 leading-relaxed">
+            {note.summary ? (
+              note.summary.replace(/<[^>]+>/g, ' ').slice(0, 150) + (note.summary.length > 150 ? '...' : '')
+            ) : note.content ? (
+              note.content.slice(0, 150) + (note.content.length > 150 ? '...' : '')
+            ) : (
+              <span className="italic text-gray-400">Transkripsi kosong</span>
+            )}
           </p>
 
           {/* Keywords */}
