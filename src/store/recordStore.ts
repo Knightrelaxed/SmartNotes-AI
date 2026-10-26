@@ -113,9 +113,13 @@ export const useRecordStore = create<RecordState>((set, get) => ({
     if (!cleanText) return;
 
     set((state) => {
-      // Prevent consecutive identical segments
+      // Prevent rapid consecutive identical network packet duplicates (< 2 seconds)
       const lastSeg = state.segments[state.segments.length - 1];
-      if (lastSeg && lastSeg.text.trim().toLowerCase() === cleanText.toLowerCase()) {
+      if (
+        lastSeg &&
+        lastSeg.text.trim().toLowerCase() === cleanText.toLowerCase() &&
+        Date.now() - new Date(lastSeg.timestamp).getTime() < 2000
+      ) {
         return state;
       }
       const segment: TranscriptionSegment = {

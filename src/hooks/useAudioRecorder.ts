@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRecordStore } from '@/store/recordStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { GeminiLiveClient } from '@/lib/gemini-live';
+import { LiveSessionManager } from '@/lib/live-session-manager';
 import { AudioPCMStreamer } from '@/lib/audio-pcm-converter';
 import { geminiConfig, aiProvidersConfig } from '@/config/app.config';
 
@@ -70,7 +71,7 @@ interface UseAudioRecorderReturn {
   isSpeechSupported: boolean;
   error: string | null;
   startRecording: () => Promise<void>;
-  stopRecording: () => void;
+  stopRecording: () => Promise<void>;
   pauseRecording: () => void;
   resumeRecording: () => void;
   audioLevel: number;
@@ -92,7 +93,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const geminiLiveRef = useRef<GeminiLiveClient | null>(null);
+  const sessionManagerRef = useRef<LiveSessionManager | null>(null);
+  const acceptingTranscriptsRef = useRef<boolean>(false);
+  const lastLevelUpdateRef = useRef<number>(0);
   const audioStreamerRef = useRef<AudioPCMStreamer | null>(null);
   const lastTranscriptRef = useRef<string>('');
   const isManuallyStoppedRef = useRef<boolean>(false);
@@ -165,18 +168,22 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     }
   }, []);
 
-  // Audio level monitoring
+  // Audio level monitoring throttled to ~16 FPS to avoid lag and CPU drain
   const monitorAudioLevel = useCallback(() => {
     if (!analyserRef.current) return;
 
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
+    const now = performance.now();
+    if (now - lastLevelUpdateRef.current >= 60) {
+      lastLevelUpdateRef.current = now;
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(dataArray);
 
-    // Calculate average level
-    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-    const normalizedLevel = Math.min(100, (average / 128) * 100);
+      // Calculate average level
+      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+      const normalizedLevel = Math.min(100, (average / 128) * 100);
 
-    setAudioLevel(normalizedLevel);
+      setAudioLevel(normalizedLevel);
+    }
 
     animationFrameRef.current = requestAnimationFrame(() => {
       monitorAudioLevelRef.current();
@@ -322,13 +329,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         audioStreamerRef.current = null;
       }
 
-      if (geminiLiveRef.current) {
+      if (sessionManagerRef.current) {
         try {
-          geminiLiveRef.current.disconnect();
+          await sessionManagerRef.current.stop();
         } catch {
           // Ignore
         }
-        geminiLiveRef.current = null;
+        sessionManagerRef.current = null;
       }
 
       if (recognitionRef.current) {
@@ -365,9 +372,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       };
       const sampleRate = sampleRateMap[audioSettings.quality] || 44100;
 
-      // Request microphone stream with high-sensitivity constraints
+      // Request microphone stream with high-sensitivity constraints and user's selected device
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          deviceId: audioSettings.inputDevice && audioSettings.inputDevice !== 'default'
+            ? { exact: audioSettings.inputDevice }
+            : undefined,
           echoCancellation: true,
           noiseSuppression: audioSettings.noiseReduction,
           autoGainControl: true,
@@ -455,41 +465,41 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           }
         } else {
           try {
+            acceptingTranscriptsRef.current = true;
             const selectedLang = useSettingsStore.getState().transcription.language || 'id';
             const languageCodes = selectedLang === 'id'
               ? ['id-ID', 'id', 'en-US', 'en']
               : ['en-US', 'en', 'id-ID', 'id'];
 
-            const client = new GeminiLiveClient({
-              apiKey: geminiApiKey,
-              languageCodes: languageCodes,
-              systemInstruction:
-                `Kamu adalah mesin Speech-to-Text (Transkriptor Audio Langsung) khusus perkuliahan dan percakapan.
+            const sessionManager = new LiveSessionManager({
+              clientFactory: (onTranscript, onDisconnected, onError) => {
+                return new GeminiLiveClient({
+                  apiKey: geminiApiKey,
+                  languageCodes: languageCodes,
+                  systemInstruction:
+                    `Kamu adalah mesin Speech-to-Text (Transkriptor Audio Langsung) khusus perkuliahan dan percakapan.
 1. Transkripsikan HANYA apa yang diucapkan pembicara secara persis apa adanya dalam Bahasa Indonesia atau Bahasa Inggris.
 2. Gunakan HANYA karakter alfabet Latin (A-Z, a-z), angka, dan tanda baca standar.
 3. JANGAN PERNAH mengeluarkan huruf/aksara non-Latin (seperti aksara Arab, Hindi/Devanagari, Sirilik, Mandarin, Thai, dll).
 4. JANGAN PERNAH merespons percakapan, jangan menjawab pertanyaan, jangan menambahkan kata sapaan, jangan membuat komentar AI sendiri.
 5. Jika pembicara hening, atau hanya terdengar desis mikrofon / derau ruangan, JANGAN mengeluarkan teks sama sekali.
 6. Pertahankan istilah teknis, medis, ilmiah, dan singkatan akademis secara akurat.`,
-              onConnected: () => {
-                setIsLiveConnected(true);
-                console.log('[useAudioRecorder] Gemini 3.5 Transcribe Live aktif.');
-              },
-              onDisconnected: (reason) => {
-                setIsLiveConnected(false);
-                console.log('[useAudioRecorder] Gemini Live terputus:', reason);
-              },
-              onError: (errMsg) => {
-                console.error('[useAudioRecorder] Gemini Live error:', errMsg);
-                setIsLiveConnected(false);
-                setError(`Gemini Live: ${errMsg}`);
-                if (useRecordStore.getState().state === 'recording' && !recognitionRef.current && isSpeechSupported) {
-                  console.log('[useAudioRecorder] Reverting to Web Speech API fallback...');
-                  startSpeechRecognitionRef.current();
-                }
+                  onConnected: () => {
+                    console.log('[useAudioRecorder] Gemini 3.5 Transcribe Live session connected.');
+                  },
+                  onDisconnected: (reason) => {
+                    onDisconnected(reason || 'Disconnected');
+                  },
+                  onError: (errMsg) => {
+                    onError(errMsg);
+                  },
+                  onTranscript: (text, isFinal) => {
+                    onTranscript(text, isFinal);
+                  },
+                });
               },
               onTranscript: (text, isFinal) => {
-                if (useRecordStore.getState().state !== 'recording') return;
+                if (!acceptingTranscriptsRef.current && useRecordStore.getState().state !== 'recording') return;
                 if (isFinal) {
                   if (text.trim()) {
                     addSegment(text.trim(), true);
@@ -501,24 +511,38 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
                   }
                 }
               },
+              onStatusChange: (isConnected, message) => {
+                setIsLiveConnected(isConnected);
+                if (message) {
+                  console.log('[useAudioRecorder] Status:', message);
+                }
+              },
+              onError: (errMsg) => {
+                console.error('[useAudioRecorder] LiveSessionManager error:', errMsg);
+                setError(`Gemini Live: ${errMsg}`);
+                if (useRecordStore.getState().state === 'recording' && !recognitionRef.current && isSpeechSupported) {
+                  console.log('[useAudioRecorder] Reverting to Web Speech API fallback...');
+                  startSpeechRecognitionRef.current();
+                }
+              },
             });
 
-            geminiLiveRef.current = client;
-            await client.connect();
+            sessionManagerRef.current = sessionManager;
 
-            // Stream 16kHz PCM audio sharing the active AudioContext and source node
+            // 1. Start audio streamer FIRST so audio is buffered immediately into sessionManager
             const streamer = new AudioPCMStreamer(16000);
             streamer.start(
               stream,
               (base64Chunk) => {
-                if (client.isConnected()) {
-                  client.sendAudioChunk(base64Chunk);
-                }
+                sessionManager.pushAudioChunk(base64Chunk);
               },
               audioCtx,
               source
             );
             audioStreamerRef.current = streamer;
+
+            // 2. Connect sessionManager (buffered chunks from first seconds are flushed automatically)
+            await sessionManager.start();
           } catch (err: any) {
             console.error('[useAudioRecorder] Gagal menghubungkan Gemini Live:', err);
             setIsLiveConnected(false);
@@ -548,11 +572,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     }
   }, [isSupported, isSpeechSupported, monitorAudioLevel, startSpeechRecognition, addSegment, updateCurrentText]);
 
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback(async () => {
     isManuallyStoppedRef.current = true;
-    setIsLiveConnected(false);
+    acceptingTranscriptsRef.current = true;
 
-    // Stop PCM audio streamer
+    // 1. Stop PCM audio streamer and flush residual buffer
     if (audioStreamerRef.current) {
       try {
         audioStreamerRef.current.stop();
@@ -562,22 +586,25 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       audioStreamerRef.current = null;
     }
 
-    // Disconnect Gemini Live client
-    if (geminiLiveRef.current) {
+    // 2. Gracefully stop LiveSessionManager and wait for final in-flight words
+    if (sessionManagerRef.current) {
       try {
-        geminiLiveRef.current.disconnect();
-      } catch {
-        // Ignore
+        await sessionManagerRef.current.stop();
+      } catch (e) {
+        console.warn('[useAudioRecorder] Error stopping session manager:', e);
       }
-      geminiLiveRef.current = null;
+      sessionManagerRef.current = null;
     }
 
-    // Stop media recorder
+    acceptingTranscriptsRef.current = false;
+    setIsLiveConnected(false);
+
+    // 3. Stop media recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
 
-    // Stop all tracks
+    // 4. Stop all tracks
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       streamRef.current = null;
@@ -585,7 +612,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
     // Close audio context
     if (audioContextRef.current) {
-      audioContextRef.current.close();
+      audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
 
@@ -645,8 +672,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       cancelAnimationFrame(animationFrameRef.current);
     }
 
+    useRecordStore.getState().finalizeSegment();
     useRecordStore.getState().pauseRecording();
-  }, []);
+  }, [releaseWakeLock]);
 
   const resumeRecording = useCallback(() => {
     isManuallyStoppedRef.current = false;
@@ -682,13 +710,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         audioStreamerRef.current = null;
       }
 
-      if (geminiLiveRef.current) {
+      if (sessionManagerRef.current) {
         try {
-          geminiLiveRef.current.disconnect();
+          void sessionManagerRef.current.stop();
         } catch {
           // Ignore
         }
-        geminiLiveRef.current = null;
+        sessionManagerRef.current = null;
       }
 
       if (animationFrameRef.current) {

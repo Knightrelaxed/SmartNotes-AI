@@ -28,6 +28,7 @@ export class GeminiLiveClient {
   private onDisconnected?: (reason?: string) => void;
   private onError?: (error: string) => void;
   private onTranscript?: (text: string, isFinal: boolean) => void;
+  private onFinalCallback?: () => void;
 
   constructor(options: GeminiLiveOptions) {
     this.apiKey = options.apiKey;
@@ -178,6 +179,37 @@ export class GeminiLiveClient {
     }
   }
 
+  public sendAudioStreamEnd(): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    try {
+      this.socket.send(
+        JSON.stringify({
+          realtimeInput: {
+            audioStreamEnd: true,
+          },
+        })
+      );
+      console.log('[GeminiLive] Sent audioStreamEnd');
+    } catch (e) {
+      console.warn('[GeminiLive] Error sending audioStreamEnd:', e);
+    }
+  }
+
+  public waitForFinal(timeoutMs = 1500): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.onFinalCallback = undefined;
+        resolve();
+      }, timeoutMs);
+
+      this.onFinalCallback = () => {
+        clearTimeout(timer);
+        this.onFinalCallback = undefined;
+        resolve();
+      };
+    });
+  }
+
   public disconnect(): void {
     this.isSetupComplete = false;
     this.isConnecting = false;
@@ -242,15 +274,16 @@ export class GeminiLiveClient {
   private filterHallucinations(text: string): string {
     if (!text) return '';
 
-    // 1. Discard non-Latin scripts (Arabic, Devanagari/Hindi, Cyrillic, Thai, CJK, etc.)
-    const nonLatinRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/;
-    if (nonLatinRegex.test(text)) {
-      console.warn('[GeminiLive] Discarded hallucinated non-Latin script:', text);
+    // 1. Strip non-Latin scripts (Arabic, Devanagari/Hindi, Cyrillic, Thai, CJK, etc.)
+    // Strips out foreign script artifacts while preserving genuine Indonesian / English words
+    const nonLatinRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]+/g;
+    const cleanedText = text.replace(nonLatinRegex, '').replace(/\s+/g, ' ').trim();
+    if (!cleanedText) {
       return '';
     }
 
     // 2. Discard common repetitive YouTube/Whisper/AI hallucination phrases
-    const lower = text.trim().toLowerCase();
+    const lower = cleanedText.toLowerCase();
     const bannedPhrases = [
       'subtitles by',
       'terima kasih telah menonton',
@@ -274,7 +307,7 @@ export class GeminiLiveClient {
       }
     }
 
-    return text;
+    return cleanedText;
   }
 
   private handleServerMessage(message: any): void {
@@ -323,6 +356,7 @@ export class GeminiLiveClient {
         console.log('[GeminiLive] Finalized speech segment:', cleanText);
         this.onTranscript?.(cleanText.trim(), true);
       }
+      this.onFinalCallback?.();
     }
 
     // 3. Fallback for modelTurn generation parts

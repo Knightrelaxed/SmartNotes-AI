@@ -75,8 +75,8 @@ export const processTranscriptionWithAI = async (
 
     const langName = language === 'id' ? 'Bahasa Indonesia' : 'English';
     
-    // Limit transcription to avoid token limit
-    const limitedTranscription = transcription.slice(0, 8000);
+    // Process full lecture transcription (Gemini 3.5 / 2.5 supports up to 1M+ tokens)
+    const limitedTranscription = transcription.slice(0, 150000);
 
     // Siapkan struktur JSON dinamis sesuai dengan opsi yang diminta user
     const requestedFields: string[] = [];

@@ -14,6 +14,7 @@ export class AudioPCMStreamer {
   private onChunkCallback: ((base64Pcm: string) => void) | null = null;
   private ownsAudioContext = false;
   private sampleBuffer: Float32Array = new Float32Array(0);
+  private currentGain = 1.0;
 
   // 100ms chunk at 16kHz is 1600 samples (optimal frame pacing for Gemini Live VAD)
   private readonly CHUNK_SIZE = 1600;
@@ -211,22 +212,25 @@ export class AudioPCMStreamer {
 
     // 1. Ultra-sensitive noise threshold:
     // Only zero out if the audio is virtually dead silence (< 0.0008, i.e. < -62 dBFS).
-    // This ensures even the faintest whispers, soft consonants (s, f, th, h),
-    // and trailing word endings are never cut off or dropped!
+    // Gently relax smoothed gain towards 1.0 during silence.
     if (peak < 0.0008) {
+      this.currentGain = this.currentGain * 0.9 + 1.0 * 0.1;
       return new Int16Array(input.length).buffer;
     }
 
-    // 2. High-Sensitivity Adaptive Gain Booster:
-    // Target healthy speech level (around 0.70 peak).
-    // Dynamic boost up to 6.0x (approx +16dB) so quiet microphones and soft speech
-    // are amplified into the prime acoustic detection range for Gemini Live.
-    let gain = 1.0;
+    // 2. Smooth Adaptive Gain Booster (Anti-Pumping AGC):
+    // Target healthy speech level (around 0.65 peak).
+    // Limit max gain to 2.5x to prevent blowing up background room hiss into hallucinations.
+    let targetGain = 1.0;
     if (peak < 0.35) {
-      gain = Math.min(6.0, 0.70 / Math.max(peak, 0.008));
+      targetGain = Math.min(2.5, 0.65 / Math.max(peak, 0.05));
     } else if (peak > 0.85) {
-      gain = 0.85 / peak; // Soft attenuation for loud sounds to prevent clipping
+      targetGain = 0.85 / peak; // Soft attenuation for loud sounds to prevent clipping
     }
+
+    // Exponential smoothing (alpha = 0.15) to eliminate pumping artifacts across 100ms chunks
+    this.currentGain = this.currentGain * 0.85 + targetGain * 0.15;
+    const gain = this.currentGain;
 
     // 3. Convert to 16-bit Signed Integer PCM Little-Endian with soft saturation curve
     const pcm16 = new Int16Array(input.length);

@@ -154,13 +154,13 @@ export function RecordPage() {
     await startRecording();
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     const duration = getDuration();
     const wordCount = getWordCount();
 
     // Prevent saving accidental ghost notes (< 5s and < 3 words)
     if (duration < 5 && wordCount < 3) {
-      stopRecording();
+      await stopRecording();
       resetRecording();
       localStorage.removeItem('smartnotes_draft');
       setLastAutoSave(null);
@@ -171,7 +171,7 @@ export function RecordPage() {
       return;
     }
 
-    stopRecording();
+    await stopRecording();
     setShowSaveDialog(true);
     const defaultTitle = currentSubject
       ? `${currentSubject} - ${formatDate(new Date(), 'd MMMM yyyy')}`
