@@ -111,9 +111,22 @@ export function TranscriptionDisplay({
         >
           {segments.length === 0 && !currentText && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <Type className="w-12 h-12 mb-4 opacity-50" />
-              <p>Transkripsi akan muncul di sini</p>
-              <p className="text-sm">Klik tombol rekam untuk memulai</p>
+              {state === 'recording' ? (
+                <>
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                  </div>
+                  <p className="font-medium text-gray-700 dark:text-gray-300">Sedang mendengarkan ucapan...</p>
+                  <p className="text-xs text-gray-400 mt-1">Bicaralah ke mikrofon atau putar audio perkuliahan</p>
+                </>
+              ) : (
+                <>
+                  <Type className="w-12 h-12 mb-4 opacity-50" />
+                  <p>Transkripsi akan muncul di sini</p>
+                  <p className="text-sm">Klik tombol rekam untuk memulai</p>
+                </>
+              )}
             </div>
           )}
 

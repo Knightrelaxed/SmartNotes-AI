@@ -31,6 +31,9 @@ export class AudioPCMStreamer {
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
@@ -77,6 +80,9 @@ export class AudioPCMStreamer {
 
   public resume(): void {
     this.isStreaming = true;
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
   }
 
   public stop(): void {

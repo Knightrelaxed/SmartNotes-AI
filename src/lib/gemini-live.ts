@@ -232,14 +232,18 @@ export class GeminiLiveClient {
       return;
     }
 
+    const serverContent = message.serverContent || message.server_content;
+
     // Server content turn
-    if (message.serverContent) {
-      const { modelTurn, turnComplete } = message.serverContent;
+    if (serverContent) {
+      const modelTurn = serverContent.modelTurn || serverContent.model_turn;
+      const turnComplete = serverContent.turnComplete ?? serverContent.turn_complete;
 
       if (modelTurn?.parts) {
         for (const part of modelTurn.parts) {
-          if (part.text) {
-            this.accumulatedText += part.text;
+          const textChunk = part.text || part.transcript || '';
+          if (textChunk) {
+            this.accumulatedText += textChunk;
             this.onTranscript?.(this.accumulatedText, false);
           }
         }
