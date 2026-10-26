@@ -18,7 +18,6 @@ export class GeminiLiveClient {
   private socket: WebSocket | null = null;
   private apiKey: string;
   private model: string;
-  private languageCodes: string[];
   private systemInstruction: string;
   private isSetupComplete = false;
   private isConnecting = false;
@@ -33,7 +32,6 @@ export class GeminiLiveClient {
   constructor(options: GeminiLiveOptions) {
     this.apiKey = options.apiKey;
     this.model = options.model || 'models/gemini-3.5-transcribe-live';
-    this.languageCodes = options.languageCodes || ['id-ID', 'id', 'en-US', 'en'];
     this.systemInstruction =
       options.systemInstruction ||
       `Kamu adalah mesin Speech-to-Text (Transkriptor Audio Langsung) khusus perkuliahan dan percakapan.
@@ -216,13 +214,8 @@ export class GeminiLiveClient {
         model: formattedModel,
         generationConfig: {
           responseModalities: ['TEXT'],
-          inputAudioTranscription: {
-            languageCodes: this.languageCodes,
-          },
         },
-        inputAudioTranscription: {
-          languageCodes: this.languageCodes,
-        },
+        inputAudioTranscription: {},
         outputAudioTranscription: {},
         systemInstruction: {
           parts: [
