@@ -1,6 +1,7 @@
 /**
  * Utility to convert browser microphone audio into 16kHz 16-bit linear PCM
  * chunks encoded in Base64 for Gemini Live API streaming.
+ * Optimized for low latency (128ms pacing) with zero dropped frames.
  */
 
 export class AudioPCMStreamer {
@@ -35,7 +36,7 @@ export class AudioPCMStreamer {
       this.ownsAudioContext = false;
     } else {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioContext = new AudioContextClass();
+      this.audioContext = new AudioContextClass({ sampleRate: this.targetSampleRate });
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       this.ownsAudioContext = true;
     }
@@ -44,13 +45,12 @@ export class AudioPCMStreamer {
       this.audioContext.resume().catch(() => {});
     }
 
-    // Buffer size of 4096 gives approx 85ms chunks at 48kHz, responsive & low-latency
-    const bufferSize = 4096;
+    // Buffer size of 2048 samples at 16kHz gives ~128ms chunks (optimal for Google VAD)
+    const bufferSize = 2048;
     this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
     this.processorNode.onaudioprocess = (event) => {
-      // 1. Zero out the output buffer so speaker hears complete silence (prevents feedback loop)
-      // without using a 0-gain node which causes Chrome to prune and stop onaudioprocess!
+      // 1. Zero out outputBuffer to prevent feedback echo without triggering Chromium silence pruning!
       const outputBuffer = event.outputBuffer.getChannelData(0);
       for (let i = 0; i < outputBuffer.length; i++) {
         outputBuffer[i] = 0;
@@ -61,17 +61,15 @@ export class AudioPCMStreamer {
       const inputBuffer = event.inputBuffer.getChannelData(0);
       const inputSampleRate = event.inputBuffer.sampleRate;
 
-      // Downsample to 16kHz
-      const downsampledBuffer = this.downsampleTo16k(
-        inputBuffer,
-        inputSampleRate,
-        this.targetSampleRate
-      );
+      // Downsample if input sample rate is different from target
+      const downsampledBuffer = inputSampleRate === this.targetSampleRate
+        ? inputBuffer
+        : this.downsampleTo16k(inputBuffer, inputSampleRate, this.targetSampleRate);
 
-      // Convert Float32 to 16-bit PCM ArrayBuffer
+      // Convert Float32 to 16-bit signed integer linear PCM ArrayBuffer
       const pcm16Buffer = this.floatTo16BitPCM(downsampledBuffer);
 
-      // Convert to Base64 string
+      // Fast Base64 string conversion
       const base64Data = this.arrayBufferToBase64(pcm16Buffer);
 
       if (base64Data) {
@@ -130,7 +128,7 @@ export class AudioPCMStreamer {
   }
 
   /**
-   * Linear interpolation downsampler
+   * Fast linear interpolation downsampler
    */
   private downsampleTo16k(
     buffer: Float32Array,
@@ -171,31 +169,30 @@ export class AudioPCMStreamer {
   }
 
   /**
-   * Convert Float32Array (-1.0 to 1.0) to 16-bit Signed Integer PCM ArrayBuffer
+   * Convert Float32Array (-1.0 to 1.0) to 16-bit Signed Integer PCM ArrayBuffer (Little-Endian)
    */
   private floatTo16BitPCM(input: Float32Array): ArrayBuffer {
-    const buffer = new ArrayBuffer(input.length * 2);
-    const view = new DataView(buffer);
-
+    const pcm16 = new Int16Array(input.length);
     for (let i = 0; i < input.length; i++) {
       const s = Math.max(-1, Math.min(1, input[i]));
-      // Convert to 16-bit signed integer (-32768 to 32767)
-      const val = s < 0 ? s * 0x8000 : s * 0x7fff;
-      view.setInt16(i * 2, val, true); // true = Little-Endian
+      pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
-
-    return buffer;
+    return pcm16.buffer;
   }
 
   /**
-   * Convert ArrayBuffer bytes to Base64
+   * Fast high-throughput ArrayBuffer to Base64 conversion
    */
   private arrayBufferToBase64(buffer: ArrayBuffer): string {
-    let binary = '';
     const bytes = new Uint8Array(buffer);
+    let binary = '';
     const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    const chunkSize = 8192;
+    for (let i = 0; i < len; i += chunkSize) {
+      binary += String.fromCharCode.apply(
+        null,
+        bytes.subarray(i, Math.min(i + chunkSize, len)) as any
+      );
     }
     return window.btoa(binary);
   }

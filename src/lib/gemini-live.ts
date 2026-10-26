@@ -237,8 +237,23 @@ export class GeminiLiveClient {
 
     const serverContent = message.serverContent || message.server_content;
 
-    // 1. Check user voice input transcription (from inputAudioTranscription)
-    const inputTranscription =
+    // 1. Real-time interim user voice input (speculative partial hypotheses as user speaks - zero delay)
+    const interim =
+      serverContent?.interimInputTranscription ||
+      serverContent?.interim_input_transcription ||
+      message?.interimInputTranscription ||
+      message?.interim_input_transcription;
+
+    if (interim) {
+      const interimText = typeof interim === 'string' ? interim : interim.text || interim.transcript || '';
+      if (interimText.trim()) {
+        console.log('[GeminiLive] Real-time interim speech:', interimText);
+        this.onTranscript?.(interimText.trim(), false);
+      }
+    }
+
+    // 2. Authoritative finalized user voice transcript (emitted on speech pauses / turn completion)
+    const finalized =
       serverContent?.inputTranscription ||
       serverContent?.input_transcription ||
       message?.inputTranscription ||
@@ -246,41 +261,15 @@ export class GeminiLiveClient {
       message?.audioTranscription ||
       message?.audio_transcription;
 
-    if (inputTranscription) {
-      let inputTransText = '';
-      let isTransFinal = false;
-
-      if (typeof inputTranscription === 'string') {
-        inputTransText = inputTranscription;
-      } else if (typeof inputTranscription === 'object') {
-        inputTransText = inputTranscription.text || inputTranscription.transcript || '';
-        isTransFinal = !!(inputTranscription.isFinal || inputTranscription.is_final || inputTranscription.final);
-      }
-
-      if (inputTransText) {
-        console.log('[GeminiLive] User voice transcription:', inputTransText, 'final:', isTransFinal);
-        this.onTranscript?.(inputTransText, isTransFinal);
+    if (finalized) {
+      const finalizedText = typeof finalized === 'string' ? finalized : finalized.text || finalized.transcript || '';
+      if (finalizedText.trim()) {
+        console.log('[GeminiLive] Finalized speech segment:', finalizedText);
+        this.onTranscript?.(finalizedText.trim(), true);
       }
     }
 
-    // 2. Check model generated output transcription
-    const outputTranscription =
-      serverContent?.outputTranscription ||
-      serverContent?.output_transcription ||
-      message?.outputTranscription ||
-      message?.output_transcription;
-
-    if (outputTranscription) {
-      const outputText = typeof outputTranscription === 'string'
-        ? outputTranscription
-        : outputTranscription.text || outputTranscription.transcript || '';
-      if (outputText) {
-        console.log('[GeminiLive] Output transcription:', outputText);
-        this.onTranscript?.(outputText, false);
-      }
-    }
-
-    // 3. Check modelTurn conversational parts
+    // 3. Fallback for modelTurn generation parts
     const modelTurn =
       serverContent?.modelTurn ||
       serverContent?.model_turn ||

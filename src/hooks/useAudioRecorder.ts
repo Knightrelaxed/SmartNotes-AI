@@ -329,9 +329,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       });
       streamRef.current = stream;
 
-      // Set up audio context for visualization and ensure active running state
+      // Set up native 16kHz audio context for low latency and zero resampling overhead
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioContextClass({ sampleRate: sampleRate });
+      const audioCtx = new AudioContextClass({ sampleRate: 16000 });
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
       }
