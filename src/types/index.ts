@@ -32,6 +32,7 @@ export interface AudioSettings {
 }
 
 export interface TranscriptionSettings {
+  engine?: 'gemini-live' | 'web-speech';
   language: string;
   modelQuality: 'fast' | 'balanced' | 'best';
   autoPunctuation: boolean;

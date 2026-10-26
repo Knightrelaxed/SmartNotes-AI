@@ -29,7 +29,15 @@ export function RecordPage() {
 
   const { addNote, subjects } = useNotesStore();
   const { addToast, setCurrentPage } = useUIStore();
-  const { startRecording, stopRecording, pauseRecording, resumeRecording, error } = useAudioRecorder();
+  const {
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    error,
+    engine,
+    isLiveConnected,
+  } = useAudioRecorder();
   const { processNote, correctText, isProcessing: isAIProcessing } = useAI();
   const { saveNoteToCloud, isConfigured: isFirebaseReady } = useFirebase();
   const { ai, interface: { autoSaveInterval } } = useSettingsStore();
@@ -256,6 +264,8 @@ export function RecordPage() {
         onPause={pauseRecording}
         onResume={resumeRecording}
         onStop={handleStop}
+        engine={engine}
+        isLiveConnected={isLiveConnected}
       />
 
       {/* Transcription Display */}

@@ -10,6 +10,7 @@ const defaultSettings: AppSettings = {
     autoGainControl: true,
   },
   transcription: {
+    engine: 'gemini-live',
     language: 'id',
     modelQuality: 'balanced',
     autoPunctuation: true,

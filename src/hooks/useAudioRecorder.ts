@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRecordStore } from '@/store/recordStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { GeminiLiveClient } from '@/lib/gemini-live';
+import { AudioPCMStreamer } from '@/lib/audio-pcm-converter';
+import { geminiConfig, aiProvidersConfig } from '@/config/app.config';
 
 // Type definitions for Web Speech API
 interface SpeechRecognitionResultList {
@@ -63,7 +66,6 @@ function getRecognitionLang(): string {
 }
 
 interface UseAudioRecorderReturn {
-
   isSupported: boolean;
   isSpeechSupported: boolean;
   error: string | null;
@@ -72,24 +74,31 @@ interface UseAudioRecorderReturn {
   pauseRecording: () => void;
   resumeRecording: () => void;
   audioLevel: number;
+  engine: 'gemini-live' | 'web-speech';
+  isLiveConnected: boolean;
 }
 
 export function useAudioRecorder(): UseAudioRecorderReturn {
   const [isSupported, setIsSupported] = useState(true);
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
+  const engine = useSettingsStore((s) => s.transcription.engine) || 'gemini-live';
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const geminiLiveRef = useRef<GeminiLiveClient | null>(null);
+  const audioStreamerRef = useRef<AudioPCMStreamer | null>(null);
   const lastTranscriptRef = useRef<string>('');
   const isManuallyStoppedRef = useRef<boolean>(false);
   const monitorAudioLevelRef = useRef<() => void>(() => {});
   const startSpeechRecognitionRef = useRef<() => void>(() => {});
-  
+
   const { setAudioLevel, addSegment, updateCurrentText } = useRecordStore();
 
   // Check for browser support
@@ -99,7 +108,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       setIsSupported(false);
       setError('Browser tidak mendukung audio recording');
     }
-    
+
     // Check speech recognition support
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -110,16 +119,16 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   // Audio level monitoring
   const monitorAudioLevel = useCallback(() => {
     if (!analyserRef.current) return;
-    
+
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
-    
+
     // Calculate average level
     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
     const normalizedLevel = Math.min(100, (average / 128) * 100);
-    
+
     setAudioLevel(normalizedLevel);
-    
+
     animationFrameRef.current = requestAnimationFrame(() => {
       monitorAudioLevelRef.current();
     });
@@ -129,7 +138,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     monitorAudioLevelRef.current = monitorAudioLevel;
   }, [monitorAudioLevel]);
 
-  // Real Speech Recognition function
+  // Real Web Speech API recognition function
   const startSpeechRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -142,27 +151,22 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
       recognitionRef.current = null;
     }
-    
+
     const recognition = new SpeechRecognition();
-    
-    // ─── Optimal configuration for Web Speech API ───
-    recognition.continuous = true;        // Keep listening without manual restart
-    recognition.interimResults = true;    // Show live interim text as user speaks
-    recognition.maxAlternatives = 3;      // Pick best of 3 alternatives for accuracy
-    
-    // Dynamically assign correct language
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 3;
     recognition.lang = getRecognitionLang();
-    
-    // Reset transcript tracking
+
     lastTranscriptRef.current = '';
-    
-    // Handle recognition results
+
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       if (useRecordStore.getState().state !== 'recording') return;
 
       let finalTranscript = '';
       let interimTranscript = '';
-      
+
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
@@ -179,24 +183,21 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           interimTranscript += result[0].transcript;
         }
       }
-      
-      // Update interim text for real-time display
+
       if (interimTranscript.trim()) {
         updateCurrentText(interimTranscript.trim());
       }
-      
-      // Add final transcripts to the store
+
       if (finalTranscript.trim()) {
         addSegment(finalTranscript.trim(), true);
         lastTranscriptRef.current = finalTranscript;
         updateCurrentText('');
       }
     };
-    
-    // Handle errors cleanly without duplicate restart calls
+
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.warn('Speech recognition warning:', event.error);
-      
+
       switch (event.error) {
         case 'no-speech':
           useRecordStore.getState().finalizeSegment();
@@ -218,15 +219,14 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           console.warn(`Speech recognition status: ${event.error}`);
       }
     };
-    
-    // Handle end - restart recognition cleanly if still recording
+
     recognition.onend = () => {
       const store = useRecordStore.getState();
-      
+
       if (store.state === 'recording') {
         store.finalizeSegment();
       }
-      
+
       if (!isManuallyStoppedRef.current && store.state === 'recording') {
         setTimeout(() => {
           if (!isManuallyStoppedRef.current && useRecordStore.getState().state === 'recording') {
@@ -239,12 +239,12 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         }, 150);
       }
     };
-    
+
     recognitionRef.current = recognition;
-    
+
     try {
       recognition.start();
-      console.log('Speech recognition started');
+      console.log('Web Speech recognition started');
     } catch (err) {
       console.error('Error starting speech recognition:', err);
     }
@@ -254,8 +254,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     startSpeechRecognitionRef.current = startSpeechRecognition;
   }, [startSpeechRecognition]);
 
-
-
   const startRecording = useCallback(async () => {
     if (!isSupported) {
       setError('Browser tidak mendukung audio recording');
@@ -264,8 +262,26 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
     try {
       setError(null);
-      
-      // Clean up any existing recording resources first
+
+      // Clean up previous STT sessions
+      if (audioStreamerRef.current) {
+        try {
+          audioStreamerRef.current.stop();
+        } catch {
+          // Ignore
+        }
+        audioStreamerRef.current = null;
+      }
+
+      if (geminiLiveRef.current) {
+        try {
+          geminiLiveRef.current.disconnect();
+        } catch {
+          // Ignore
+        }
+        geminiLiveRef.current = null;
+      }
+
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -274,7 +290,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         }
         recognitionRef.current = null;
       }
-      
+
       if (audioContextRef.current) {
         try {
           audioContextRef.current.close();
@@ -283,38 +299,32 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         }
         audioContextRef.current = null;
       }
-      
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
         streamRef.current = null;
       }
-      
-      // Reset transcript tracking
+
       lastTranscriptRef.current = '';
-      
-      // Clear any previous transcription
       useRecordStore.getState().clearTranscription();
-      
-      // Get current audio settings
+
       const audioSettings = useSettingsStore.getState().audio;
-      
-      // Map quality setting to sample rate
       const sampleRateMap: Record<string, number> = {
         low: 16000,
         medium: 44100,
-        high: 48000
+        high: 48000,
       };
       const sampleRate = sampleRateMap[audioSettings.quality] || 44100;
 
-      // Get microphone access with maximized audio quality for recognition
+      // Request microphone stream
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,         // Always ON — removes speaker echo
-          noiseSuppression: audioSettings.noiseReduction, // User setting
-          autoGainControl: audioSettings.autoGainControl, // User setting
+          echoCancellation: true,
+          noiseSuppression: audioSettings.noiseReduction,
+          autoGainControl: audioSettings.autoGainControl,
           sampleRate: sampleRate,
-          sampleSize: 16,                 // 16-bit audio for cleaner signal
-          channelCount: 1,                // Mono — better for speech recognition
+          sampleSize: 16,
+          channelCount: 1,
         } as MediaTrackConstraints,
       });
       streamRef.current = stream;
@@ -323,8 +333,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       audioContextRef.current = new AudioContext({ sampleRate: sampleRate });
       const source = audioContextRef.current.createMediaStreamSource(stream);
       analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 1024;        // Higher resolution frequency data
-      analyserRef.current.smoothingTimeConstant = 0.85; // Smoother audio visualizer
+      analyserRef.current.fftSize = 1024;
+      analyserRef.current.smoothingTimeConstant = 0.85;
       source.connect(analyserRef.current);
 
       // Set up media recorder with supported mimeType
@@ -334,7 +344,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         'audio/webm',
         'audio/ogg;codecs=opus',
         'audio/mp4',
-        'audio/aac'
+        'audio/aac',
       ];
       for (const candidate of candidateTypes) {
         if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidate)) {
@@ -343,54 +353,148 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         }
       }
 
-      const mediaRecorder = mimeType 
-        ? new MediaRecorder(stream, { mimeType }) 
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
         : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
       const chunks: Blob[] = [];
-
       mediaRecorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           chunks.push(event.data);
         }
       };
 
-      // Store audio blob for potential use
       mediaRecorder.onstop = () => {
         const audioBlob = new Blob(chunks, { type: mimeType || 'audio/webm' });
         console.log('Recording stopped, blob size:', audioBlob.size);
         (mediaRecorderRef.current as any).audioBlob = audioBlob;
       };
 
-      mediaRecorder.start(1000); // Collect data every second
-      
-      // Start audio level monitoring
+      mediaRecorder.start(1000);
+
       monitorAudioLevel();
-      
-      // Update store state - reset first to ensure clean state
+
       isManuallyStoppedRef.current = false;
       useRecordStore.getState().resetRecording();
       useRecordStore.getState().startRecording();
-      
-      // Start real speech recognition if supported
-      if (isSpeechSupported) {
-        // Small delay to ensure clean state
-        setTimeout(() => {
-          startSpeechRecognition();
-        }, 100);
+
+      // Launch STT Engine
+      const selectedEngine = useSettingsStore.getState().transcription.engine || 'gemini-live';
+
+      if (selectedEngine === 'gemini-live') {
+        const geminiApiKey =
+          useSettingsStore.getState().ai.geminiApiKey?.trim() ||
+          geminiConfig.apiKey ||
+          aiProvidersConfig.gemini?.[0]?.key ||
+          '';
+
+        if (!geminiApiKey) {
+          console.warn('[useAudioRecorder] Gemini API Key tidak ditemukan. Beralih ke Web Speech API.');
+          setError('API Key Gemini belum diatur. Menggunakan Web Speech API sebagai cadangan.');
+          if (isSpeechSupported) {
+            setTimeout(() => {
+              startSpeechRecognition();
+            }, 100);
+          }
+        } else {
+          try {
+            const client = new GeminiLiveClient({
+              apiKey: geminiApiKey,
+              systemInstruction:
+                'Transkripsikan audio perkuliahan yang didengar secara akurat ke dalam bahasa Indonesia atau Inggris. Berikan tanda baca lengkap, kapitalisasi yang tepat, dan pertahankan istilah akademis, ilmiah, atau matematika. Hanya keluarkan teks hasil transkripsi tanpa komentar apapun.',
+              onConnected: () => {
+                setIsLiveConnected(true);
+                console.log('[useAudioRecorder] Gemini 3.5 Transcribe Live aktif.');
+              },
+              onDisconnected: (reason) => {
+                setIsLiveConnected(false);
+                console.log('[useAudioRecorder] Gemini Live terputus:', reason);
+              },
+              onError: (errMsg) => {
+                console.error('[useAudioRecorder] Gemini Live error:', errMsg);
+                setIsLiveConnected(false);
+                if (useRecordStore.getState().state === 'recording' && !recognitionRef.current && isSpeechSupported) {
+                  console.log('[useAudioRecorder] Reverting to Web Speech API fallback...');
+                  startSpeechRecognitionRef.current();
+                }
+              },
+              onTranscript: (text, isFinal) => {
+                if (useRecordStore.getState().state !== 'recording') return;
+                if (isFinal) {
+                  if (text.trim()) {
+                    addSegment(text.trim(), true);
+                  }
+                  updateCurrentText('');
+                } else {
+                  if (text.trim()) {
+                    updateCurrentText(text.trim());
+                  }
+                }
+              },
+            });
+
+            geminiLiveRef.current = client;
+            await client.connect();
+
+            // Stream 16kHz PCM audio
+            const streamer = new AudioPCMStreamer(16000);
+            streamer.start(stream, (base64Chunk) => {
+              if (client.isConnected()) {
+                client.sendAudioChunk(base64Chunk);
+              }
+            });
+            audioStreamerRef.current = streamer;
+          } catch (err: any) {
+            console.error('[useAudioRecorder] Gagal menghubungkan Gemini Live:', err);
+            setIsLiveConnected(false);
+            if (isSpeechSupported) {
+              console.log('[useAudioRecorder] Mengaktifkan Web Speech API sebagai fallback...');
+              startSpeechRecognition();
+            } else {
+              setError('Gagal menyambungkan Gemini Live dan Web Speech API tidak tersedia.');
+            }
+          }
+        }
       } else {
-        console.warn('Speech recognition not supported');
+        // Web Speech API
+        if (isSpeechSupported) {
+          setTimeout(() => {
+            startSpeechRecognition();
+          }, 100);
+        } else {
+          console.warn('Speech recognition not supported');
+        }
       }
-      
     } catch (err) {
       console.error('Error starting recording:', err);
       setError('Gagal mengakses mikrofon. Pastikan izin diberikan.');
     }
-  }, [isSupported, isSpeechSupported, monitorAudioLevel, startSpeechRecognition]);
+  }, [isSupported, isSpeechSupported, monitorAudioLevel, startSpeechRecognition, addSegment, updateCurrentText]);
 
   const stopRecording = useCallback(() => {
     isManuallyStoppedRef.current = true;
+    setIsLiveConnected(false);
+
+    // Stop PCM audio streamer
+    if (audioStreamerRef.current) {
+      try {
+        audioStreamerRef.current.stop();
+      } catch {
+        // Ignore
+      }
+      audioStreamerRef.current = null;
+    }
+
+    // Disconnect Gemini Live client
+    if (geminiLiveRef.current) {
+      try {
+        geminiLiveRef.current.disconnect();
+      } catch {
+        // Ignore
+      }
+      geminiLiveRef.current = null;
+    }
 
     // Stop media recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -431,8 +535,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     // Reset last transcript
     lastTranscriptRef.current = '';
 
-    // Finalize any remaining interim text and stop logical recording,
-    // but keep segments & timing so they can be saved.
+    // Finalize any remaining interim text and stop logical recording
     const store = useRecordStore.getState();
     store.finalizeSegment();
     store.stopRecording();
@@ -442,9 +545,15 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   const pauseRecording = useCallback(() => {
     isManuallyStoppedRef.current = true;
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
     }
+
+    if (audioStreamerRef.current) {
+      audioStreamerRef.current.pause();
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -453,34 +562,60 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
       recognitionRef.current = null;
     }
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
+
     useRecordStore.getState().pauseRecording();
   }, []);
 
   const resumeRecording = useCallback(() => {
     isManuallyStoppedRef.current = false;
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
     }
+
+    if (audioStreamerRef.current) {
+      audioStreamerRef.current.resume();
+    }
+
     monitorAudioLevel();
     useRecordStore.getState().resumeRecording();
-    if (isSpeechSupported) {
+
+    const selectedEngine = useSettingsStore.getState().transcription.engine || 'gemini-live';
+    if (selectedEngine === 'web-speech' && isSpeechSupported) {
       startSpeechRecognition();
     }
   }, [monitorAudioLevel, isSpeechSupported, startSpeechRecognition]);
 
-  // BUG FIX #12: Cleanup on unmount - stop recording if active
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Stop animation frame
+      if (audioStreamerRef.current) {
+        try {
+          audioStreamerRef.current.stop();
+        } catch {
+          // Ignore
+        }
+        audioStreamerRef.current = null;
+      }
+
+      if (geminiLiveRef.current) {
+        try {
+          geminiLiveRef.current.disconnect();
+        } catch {
+          // Ignore
+        }
+        geminiLiveRef.current = null;
+      }
+
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      
-      // Stop media recorder if active
+
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         try {
           mediaRecorderRef.current.stop();
@@ -488,18 +623,15 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           // Ignore
         }
       }
-      
-      // Stop all tracks
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       }
-      
-      // Close audio context
+
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
+        audioContextRef.current.close().catch(() => {});
       }
-      
-      // Stop speech recognition
+
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
@@ -510,7 +642,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
     };
   }, []);
-
 
   const { audioLevel } = useRecordStore();
 
@@ -523,5 +654,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     pauseRecording,
     resumeRecording,
     audioLevel,
+    engine,
+    isLiveConnected,
   };
 }

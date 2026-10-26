@@ -1,4 +1,4 @@
-import { Mic, Pause, Play, Square } from 'lucide-react';
+import { Mic, Pause, Play, Square, Sparkles, Radio } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,8 @@ interface RecordControlsProps {
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
+  engine?: 'gemini-live' | 'web-speech';
+  isLiveConnected?: boolean;
 }
 
 export function RecordControls({
@@ -29,6 +31,8 @@ export function RecordControls({
   onPause,
   onResume,
   onStop,
+  engine = 'gemini-live',
+  isLiveConnected = false,
 }: RecordControlsProps) {
   return (
     <>
@@ -71,7 +75,49 @@ export function RecordControls({
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* STT Engine Badge */}
+              {engine === 'gemini-live' ? (
+                <div
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                    isLiveConnected
+                      ? 'bg-purple-50 text-purple-700 border-purple-300 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'
+                      : state === 'recording'
+                      ? 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+                  )}
+                  title={
+                    isLiveConnected
+                      ? 'Terhubung ke Gemini 3.5 Transcribe Live WebSocket'
+                      : state === 'recording'
+                      ? 'Menghubungkan ke Gemini Live...'
+                      : 'Gemini 3.5 Transcribe Live Standby'
+                  }
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[#6C63FF]" />
+                  <span>Gemini 3.5 Live</span>
+                  <span
+                    className={cn(
+                      'w-2 h-2 rounded-full',
+                      isLiveConnected
+                        ? 'bg-emerald-500 animate-pulse'
+                        : state === 'recording'
+                        ? 'bg-amber-500 animate-ping'
+                        : 'bg-gray-400'
+                    )}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                  title="Web Speech API bawaan browser"
+                >
+                  <Radio className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Web Speech API</span>
+                </div>
+              )}
+
               <Select
                 value={currentSubject}
                 onValueChange={onSelectSubject}

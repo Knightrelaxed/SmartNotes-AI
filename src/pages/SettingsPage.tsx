@@ -204,10 +204,28 @@ ${note.content}
       {/* Transcription Settings */}
       <SettingsSection
         title="Pengaturan Transkripsi"
-        description="Pilihan bahasa dan penyimpanan draf otomatis"
+        description="Pilihan mesin STT, bahasa, dan interval penyimpanan otomatis"
         icon={Languages}
         delay={0.1}
       >
+        <SettingItem
+          label="Mesin Transkripsi (STT)"
+          description="Pilih teknologi Speech-to-Text untuk menyalin perkuliahan secara live"
+        >
+          <Select
+            value={transcription.engine || 'gemini-live'}
+            onValueChange={(v: 'gemini-live' | 'web-speech') => updateTranscription({ engine: v })}
+          >
+            <SelectTrigger className="w-[240px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gemini-live">⚡ Gemini 3.5 Transcribe Live</SelectItem>
+              <SelectItem value="web-speech">🌐 Web Speech API (Browser)</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingItem>
+
         <SettingItem
           label="Bahasa Transkripsi"
           description="Bahasa utama yang dideteksi oleh Speech Recognition"
