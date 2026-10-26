@@ -32,7 +32,7 @@ export function NotesPage() {
   } = useNotesStore();
 
   const { addToast, setCurrentPage } = useUIStore();
-  const { updateNoteInCloud, deleteNoteFromCloud, isConfigured: isFirebaseReady, userId } = useFirebase();
+  const { updateNoteInCloud, deleteNoteFromCloud, isConfigured: isFirebaseReady } = useFirebase();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingNote, setViewNote] = useState<Note | null>(null);
@@ -49,7 +49,7 @@ export function NotesPage() {
 
   const handleSaveSummary = async (id: string, newSummary: string) => {
     updateNote(id, { summary: newSummary });
-    if (isFirebaseReady && userId) {
+    if (isFirebaseReady) {
       try {
         await updateNoteInCloud(id, { summary: newSummary });
       } catch (err) {
@@ -65,7 +65,7 @@ export function NotesPage() {
 
   const handleDelete = async (id: string) => {
     deleteNote(id);
-    if (isFirebaseReady && userId) {
+    if (isFirebaseReady) {
       try {
         await deleteNoteFromCloud(id);
       } catch (err) {

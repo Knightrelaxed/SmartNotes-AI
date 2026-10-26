@@ -4,14 +4,13 @@
 
 // Firebase Configuration
 export const firebaseConfig = {
-  apiKey: "AIzaSyAmpfBlEOVgKREVHwdJh7xBU2GRmXAUXpY",
-  authDomain: "smartnotes-ai-ae90a.firebaseapp.com",
-  databaseURL: "https://smartnotes-ai-ae90a-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "smartnotes-ai-ae90a",
-  storageBucket: "smartnotes-ai-ae90a.firebasestorage.app",
-  messagingSenderId: "1068046768020",
-  appId: "1:1068046768020:web:b7e23135369090ef422181",
-  measurementId: "G-L4SHVJ6PKW"
+  apiKey: "AIzaSyAwbDw9ZRGmjYZ3_e3pYMuBpM7qFZ8pUJw",
+  authDomain: "smartnotesai-f8e13.firebaseapp.com",
+  projectId: "smartnotesai-f8e13",
+  storageBucket: "smartnotesai-f8e13.firebasestorage.app",
+  messagingSenderId: "1083200273741",
+  appId: "1:1083200273741:web:a9dbbd2bc57fcc8145cb04",
+  measurementId: "G-033GJ1YBHK"
 };
 
 // Gemini AI Configuration

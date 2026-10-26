@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
+  signInUser,
   onUserAuthStateChanged,
   subscribeToNotes,
   saveNote,
@@ -75,11 +76,18 @@ export function useFirebase(): UseFirebaseReturn {
     };
 
     // Listen for auth state changes
-    unsubscribeAuth = onUserAuthStateChanged((user) => {
+    unsubscribeAuth = onUserAuthStateChanged(async (user) => {
       if (user) {
         setUserId(user.uid);
       } else {
-        setUserId(null);
+        try {
+          const anonUser = await signInUser();
+          if (anonUser) {
+            setUserId(anonUser.uid);
+          }
+        } catch {
+          setUserId(null);
+        }
       }
       setIsInitialized(true);
       setIsLoading(false);
@@ -138,19 +146,20 @@ export function useFirebase(): UseFirebaseReturn {
   const saveNoteToCloud = useCallback(async (
     note: Omit<FirebaseNote, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<string | null> => {
-    if (!isConfigured || !userId) {
-      console.warn('Cannot save note: Firebase not configured or no user');
+    if (!isConfigured) {
+      console.warn('Cannot save note: Firebase not configured');
       return null;
     }
+    const currentUserId = userId || 'anonymous';
     try {
-      const noteId = await saveNote(userId, note);
+      const noteId = await saveNote(currentUserId, note);
       if (noteId) {
-        addToast({ type: 'success', message: 'Catatan tersimpan ke cloud' });
+        addToast({ type: 'success', message: 'Catatan tersimpan ke Cloud Firestore' });
       }
       return noteId;
     } catch (err) {
       console.error('Error saving note:', err);
-      addToast({ type: 'error', message: 'Gagal menyimpan ke cloud' });
+      addToast({ type: 'error', message: 'Gagal menyimpan ke Cloud Firestore' });
       throw err;
     }
   }, [userId, isConfigured, addToast]);
@@ -160,34 +169,34 @@ export function useFirebase(): UseFirebaseReturn {
     noteId: string,
     updates: Partial<FirebaseNote>
   ): Promise<void> => {
-    if (!isConfigured || !userId) {
-      console.warn('Cannot update note: Firebase not configured or no user');
+    if (!isConfigured) {
+      console.warn('Cannot update note: Firebase not configured');
       return;
     }
 
     try {
-      await updateNote(userId, noteId, updates);
-      addToast({ type: 'success', message: 'Catatan diperbarui' });
+      await updateNote(userId || 'anonymous', noteId, updates);
+      addToast({ type: 'success', message: 'Catatan diperbarui di Cloud' });
     } catch (err) {
       console.error('Error updating note:', err);
-      addToast({ type: 'error', message: 'Gagal memperbarui catatan' });
+      addToast({ type: 'error', message: 'Gagal memperbarui catatan di Cloud' });
       throw err;
     }
   }, [userId, isConfigured, addToast]);
 
   // Delete note from cloud
   const deleteNoteFromCloud = useCallback(async (noteId: string): Promise<void> => {
-    if (!isConfigured || !userId) {
-      console.warn('Cannot delete note: Firebase not configured or no user');
+    if (!isConfigured) {
+      console.warn('Cannot delete note: Firebase not configured');
       return;
     }
 
     try {
-      await deleteNote(userId, noteId);
-      addToast({ type: 'success', message: 'Catatan dihapus' });
+      await deleteNote(userId || 'anonymous', noteId);
+      addToast({ type: 'success', message: 'Catatan dihapus dari Cloud' });
     } catch (err) {
       console.error('Error deleting note:', err);
-      addToast({ type: 'error', message: 'Gagal menghapus catatan' });
+      addToast({ type: 'error', message: 'Gagal menghapus catatan dari Cloud' });
       throw err;
     }
   }, [userId, isConfigured, addToast]);

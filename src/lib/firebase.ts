@@ -1,30 +1,46 @@
-// BUG FIX #6: Remove unused getAnalytics import to prevent SSR issues
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, push, onValue, remove, update, get } from 'firebase/database';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, signOut, GoogleAuthProvider, type User } from 'firebase/auth';
+import {
+  getFirestore,
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  orderBy,
+  type Firestore,
+} from 'firebase/firestore';
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  GoogleAuthProvider,
+  type User,
+  type Auth,
+} from 'firebase/auth';
 import { firebaseConfig } from '@/config/app.config';
 
 // Check if Firebase config is valid
-const isFirebaseConfigured = () => {
-  return !!(
-    firebaseConfig.apiKey &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.databaseURL &&
-    firebaseConfig.projectId
-  );
+export const isFirebaseConfigured = (): boolean => {
+  return !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 };
 
-// Initialize Firebase only if configured
+// Initialize Firebase
 let app: ReturnType<typeof initializeApp> | null = null;
-let database: ReturnType<typeof getDatabase> | null = null;
-let auth: ReturnType<typeof getAuth> | null = null;
+let db: Firestore | null = null;
+let auth: Auth | null = null;
 
 if (isFirebaseConfigured()) {
   try {
     app = initializeApp(firebaseConfig);
-    database = getDatabase(app);
+    db = getFirestore(app);
     auth = getAuth(app);
-    console.log('Firebase initialized successfully');
+    console.log('Firebase Cloud Firestore & Auth initialized successfully');
   } catch (error) {
     console.error('Firebase initialization error:', error);
   }
@@ -109,128 +125,131 @@ export interface FirebaseNote {
   summary?: string;
   keywords?: string[];
   outline?: string[];
+  userId?: string;
 }
 
-export const saveNote = async (userId: string, note: Omit<FirebaseNote, 'id' | 'createdAt' | 'updatedAt'>): Promise<string | null> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+export const saveNote = async (
+  userId: string,
+  note: Omit<FirebaseNote, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string | null> => {
+  if (!db) {
+    console.warn('Firestore not initialized');
     return null;
   }
   
   try {
-    const notesRef = ref(database, `users/${userId}/notes`);
-    const newNoteRef = push(notesRef);
     const timestamp = Date.now();
-    
-    await set(newNoteRef, {
+    const notesRef = collection(db, 'notes');
+    const docRef = await addDoc(notesRef, {
       ...note,
+      userId,
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
     });
     
-    console.log('Note saved to Firebase:', newNoteRef.key);
-    return newNoteRef.key;
+    console.log('Note saved to Firestore:', docRef.id);
+    return docRef.id;
   } catch (error) {
-    console.error('Error saving note:', error);
+    console.error('Error saving note to Firestore:', error);
     throw error;
   }
 };
 
-export const updateNote = async (userId: string, noteId: string, updates: Partial<FirebaseNote>): Promise<void> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+export const updateNote = async (
+  _userId: string,
+  noteId: string,
+  updates: Partial<FirebaseNote>
+): Promise<void> => {
+  if (!db) {
+    console.warn('Firestore not initialized');
     return;
   }
   
   try {
-    const noteRef = ref(database, `users/${userId}/notes/${noteId}`);
-    await update(noteRef, {
+    const noteRef = doc(db, 'notes', noteId);
+    await updateDoc(noteRef, {
       ...updates,
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
     });
     
-    console.log('Note updated:', noteId);
+    console.log('Note updated in Firestore:', noteId);
   } catch (error) {
-    console.error('Error updating note:', error);
+    console.error('Error updating note in Firestore:', error);
     throw error;
   }
 };
 
-export const deleteNote = async (userId: string, noteId: string): Promise<void> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+export const deleteNote = async (
+  _userId: string,
+  noteId: string
+): Promise<void> => {
+  if (!db) {
+    console.warn('Firestore not initialized');
     return;
   }
   
   try {
-    const noteRef = ref(database, `users/${userId}/notes/${noteId}`);
-    await remove(noteRef);
-    console.log('Note deleted:', noteId);
+    const noteRef = doc(db, 'notes', noteId);
+    await deleteDoc(noteRef);
+    console.log('Note deleted from Firestore:', noteId);
   } catch (error) {
-    console.error('Error deleting note:', error);
+    console.error('Error deleting note from Firestore:', error);
     throw error;
   }
 };
 
-export const getNoteById = async (userId: string, noteId: string): Promise<FirebaseNote | null> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+export const getNoteById = async (
+  _userId: string,
+  noteId: string
+): Promise<FirebaseNote | null> => {
+  if (!db) {
+    console.warn('Firestore not initialized');
     return null;
   }
   
   try {
-    const noteRef = ref(database, `users/${userId}/notes/${noteId}`);
-    const snapshot = await get(noteRef);
+    const noteRef = doc(db, 'notes', noteId);
+    const snap = await getDoc(noteRef);
     
-    if (snapshot.exists()) {
-      return { id: noteId, ...snapshot.val() } as FirebaseNote;
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() } as FirebaseNote;
     }
     return null;
   } catch (error) {
-    console.error('Error getting note:', error);
+    console.error('Error getting note from Firestore:', error);
     throw error;
   }
 };
 
-// Mengubah parameter agar tidak selalu butuh spesifik userId demi merangkum seluruh notes admin secara public
-// Mengambil data langsung dari public_notes
 export const subscribeToNotes = (callback: (notes: FirebaseNote[]) => void) => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+  if (!db) {
+    console.warn('Firestore not initialized');
     callback([]);
     return () => {};
   }
-  
-  // Baca root "users" agar tampilkan ke pengunjung public
-  const notesRef = ref(database, `users`);
-  
-  return onValue(notesRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      let notesArray: FirebaseNote[] = [];
-      
-      // Loop tiap akun user/admin
-      Object.keys(data).forEach(uid => {
-        const userNotes = data[uid].notes;
-        if (userNotes) {
-          const parsedNotes = Object.entries(userNotes).map(([id, note]: [string, any]) => ({
-            id,
-            ...note
-          })) as FirebaseNote[];
-          notesArray = [...notesArray, ...parsedNotes];
-        }
+
+  const notesRef = collection(db, 'notes');
+  const q = query(notesRef, orderBy('createdAt', 'desc'));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const notesArray: FirebaseNote[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          ...data,
+          createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+          updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
+        } as FirebaseNote;
       });
-      
-      // Sort by createdAt descending
-      notesArray.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       callback(notesArray);
-    } else {
+    },
+    (error) => {
+      console.error('Error subscribing to Firestore notes:', error);
       callback([]);
     }
-  }, (error) => {
-    console.error('Error subscribing to global notes:', error);
-    callback([]);
-  });
+  );
 };
 
 // ==================== REAL-TIME TRANSCRIPTION SESSIONS ====================
@@ -253,142 +272,122 @@ export interface TranscriptionSession {
   chunks?: TranscriptionChunk[];
 }
 
-export const createTranscriptionSession = async (userId: string, subject: string): Promise<string | null> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+export const createTranscriptionSession = async (
+  userId: string,
+  subject: string
+): Promise<string | null> => {
+  if (!db) {
+    console.warn('Firestore not initialized');
     return null;
   }
   
   try {
-    const sessionsRef = ref(database, 'sessions');
-    const newSessionRef = push(sessionsRef);
-    
-    await set(newSessionRef, {
+    const sessionsRef = collection(db, 'sessions');
+    const docRef = await addDoc(sessionsRef, {
       userId,
       subject,
       startTime: Date.now(),
-      status: 'active'
+      status: 'active',
     });
     
-    console.log('Transcription session created:', newSessionRef.key);
-    return newSessionRef.key;
+    console.log('Transcription session created:', docRef.id);
+    return docRef.id;
   } catch (error) {
     console.error('Error creating session:', error);
     throw error;
   }
 };
 
-export const saveTranscriptionChunk = async (sessionId: string, chunk: Omit<TranscriptionChunk, 'id' | 'timestamp'>): Promise<void> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
-    return;
-  }
+export const saveTranscriptionChunk = async (
+  sessionId: string,
+  chunk: Omit<TranscriptionChunk, 'id' | 'timestamp'>
+): Promise<void> => {
+  if (!db) return;
   
   try {
-    const chunksRef = ref(database, `sessions/${sessionId}/chunks`);
-    const newChunkRef = push(chunksRef);
-    
-    await set(newChunkRef, {
+    const chunksRef = collection(db, 'sessions', sessionId, 'chunks');
+    await addDoc(chunksRef, {
       ...chunk,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   } catch (error) {
-    console.error('Error saving transcription chunk:', error);
-    throw error;
+    console.error('Error saving chunk to Firestore:', error);
   }
 };
 
-export const updateSessionStatus = async (sessionId: string, status: TranscriptionSession['status']): Promise<void> => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
-    return;
-  }
+export const updateSessionStatus = async (
+  sessionId: string,
+  status: TranscriptionSession['status']
+): Promise<void> => {
+  if (!db) return;
   
   try {
-    const sessionRef = ref(database, `sessions/${sessionId}`);
-    const updates: any = { status };
+    const sessionRef = doc(db, 'sessions', sessionId);
+    const updates: Record<string, unknown> = { status };
     
     if (status === 'completed') {
       updates.endTime = Date.now();
     }
     
-    await update(sessionRef, updates);
+    await updateDoc(sessionRef, updates);
   } catch (error) {
     console.error('Error updating session status:', error);
-    throw error;
   }
 };
 
-export const subscribeToTranscription = (sessionId: string, callback: (chunks: TranscriptionChunk[]) => void) => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
+export const subscribeToTranscription = (
+  sessionId: string,
+  callback: (chunks: TranscriptionChunk[]) => void
+) => {
+  if (!db) {
     callback([]);
     return () => {};
   }
   
-  const chunksRef = ref(database, `sessions/${sessionId}/chunks`);
+  const chunksRef = collection(db, 'sessions', sessionId, 'chunks');
+  const q = query(chunksRef, orderBy('timestamp', 'asc'));
   
-  return onValue(chunksRef, (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-      const chunksArray = Object.entries(data).map(([id, chunk]: [string, any]) => ({
-        id,
-        ...chunk
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const chunks = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
       })) as TranscriptionChunk[];
-      
-      // Sort by timestamp ascending
-      chunksArray.sort((a, b) => a.timestamp - b.timestamp);
-      callback(chunksArray);
-    } else {
+      callback(chunks);
+    },
+    (error) => {
+      console.error('Error subscribing to transcription in Firestore:', error);
       callback([]);
     }
-  }, (error) => {
-    console.error('Error subscribing to transcription:', error);
-    callback([]);
-  });
+  );
 };
 
-// ==================== STATISTICS FUNCTIONS ====================
+// ==================== STATISTICS ====================
 
-export const getUserStats = async (userId: string) => {
-  if (!database) {
-    console.warn('Firebase Database not initialized');
-    return null;
-  }
+export const getUserStats = async (_userId: string) => {
+  if (!db) return null;
   
   try {
-    const notesRef = ref(database, `users/${userId}/notes`);
-    const snapshot = await get(notesRef);
-    
-    if (!snapshot.exists()) {
-      return {
-        totalNotes: 0,
-        totalDuration: 0,
-        totalWords: 0,
-        subjects: {},
-        dailyActivity: {}
-      };
-    }
-    
-    const notes = Object.values(snapshot.val()) as FirebaseNote[];
+    const notesRef = collection(db, 'notes');
+    const snapshot = await getDocs(notesRef);
+    const notes = snapshot.docs.map((d) => d.data() as FirebaseNote);
     
     const stats = {
       totalNotes: notes.length,
       totalDuration: notes.reduce((sum, n) => sum + (n.duration || 0), 0),
       totalWords: notes.reduce((sum, n) => sum + (n.wordCount || 0), 0),
       subjects: {} as Record<string, { count: number; duration: number }>,
-      dailyActivity: {} as Record<string, { count: number; duration: number }>
+      dailyActivity: {} as Record<string, { count: number; duration: number }>,
     };
     
-    notes.forEach(note => {
-      // Subject stats
+    notes.forEach((note) => {
       if (!stats.subjects[note.subject]) {
         stats.subjects[note.subject] = { count: 0, duration: 0 };
       }
       stats.subjects[note.subject].count++;
       stats.subjects[note.subject].duration += note.duration || 0;
       
-      // Daily activity
       const date = new Date(note.createdAt).toISOString().split('T')[0];
       if (!stats.dailyActivity[date]) {
         stats.dailyActivity[date] = { count: 0, duration: 0 };
@@ -406,5 +405,6 @@ export const getUserStats = async (userId: string) => {
 
 // ==================== EXPORT ====================
 
-export { app, database, auth, isFirebaseConfigured };
+export { app, db, auth };
+export const database = db;
 export default app;

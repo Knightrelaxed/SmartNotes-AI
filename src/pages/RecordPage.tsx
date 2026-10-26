@@ -31,7 +31,7 @@ export function RecordPage() {
   const { addToast, setCurrentPage } = useUIStore();
   const { startRecording, stopRecording, pauseRecording, resumeRecording, error } = useAudioRecorder();
   const { processNote, correctText, isProcessing: isAIProcessing } = useAI();
-  const { saveNoteToCloud, isConfigured: isFirebaseReady, userId } = useFirebase();
+  const { saveNoteToCloud, isConfigured: isFirebaseReady } = useFirebase();
   const { ai, interface: { autoSaveInterval } } = useSettingsStore();
 
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -193,8 +193,8 @@ export function RecordPage() {
     // Save locally first
     addNote(baseData);
 
-    // Sync to cloud if authenticated
-    if (isFirebaseReady && userId) {
+    // Sync to cloud
+    if (isFirebaseReady) {
       try {
         await saveNoteToCloud(baseData);
       } catch (err) {
