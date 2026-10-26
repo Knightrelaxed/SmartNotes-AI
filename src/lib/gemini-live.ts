@@ -205,6 +205,8 @@ export class GeminiLiveClient {
         generationConfig: {
           responseModalities: ['TEXT'],
         },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
         systemInstruction: {
           parts: [
             {
@@ -216,6 +218,7 @@ export class GeminiLiveClient {
     };
 
     try {
+      console.log('[GeminiLive] Sending setup message:', JSON.stringify(setupMessage));
       this.socket.send(JSON.stringify(setupMessage));
     } catch (e) {
       console.error('[GeminiLive] Error sending setup message:', e);
@@ -234,7 +237,50 @@ export class GeminiLiveClient {
 
     const serverContent = message.serverContent || message.server_content;
 
-    // Server content turn
+    // 1. Check user voice input transcription (from inputAudioTranscription)
+    const inputTranscription =
+      serverContent?.inputTranscription ||
+      serverContent?.input_transcription ||
+      message?.inputTranscription ||
+      message?.input_transcription ||
+      message?.audioTranscription ||
+      message?.audio_transcription;
+
+    if (inputTranscription) {
+      let inputTransText = '';
+      let isTransFinal = false;
+
+      if (typeof inputTranscription === 'string') {
+        inputTransText = inputTranscription;
+      } else if (typeof inputTranscription === 'object') {
+        inputTransText = inputTranscription.text || inputTranscription.transcript || '';
+        isTransFinal = !!(inputTranscription.isFinal || inputTranscription.is_final || inputTranscription.final);
+      }
+
+      if (inputTransText) {
+        console.log('[GeminiLive] User voice transcription:', inputTransText, 'final:', isTransFinal);
+        this.onTranscript?.(inputTransText, isTransFinal);
+      }
+    }
+
+    // 2. Check model generated output transcription
+    const outputTranscription =
+      serverContent?.outputTranscription ||
+      serverContent?.output_transcription ||
+      message?.outputTranscription ||
+      message?.output_transcription;
+
+    if (outputTranscription) {
+      const outputText = typeof outputTranscription === 'string'
+        ? outputTranscription
+        : outputTranscription.text || outputTranscription.transcript || '';
+      if (outputText) {
+        console.log('[GeminiLive] Output transcription:', outputText);
+        this.onTranscript?.(outputText, false);
+      }
+    }
+
+    // 3. Check modelTurn conversational parts
     const modelTurn =
       serverContent?.modelTurn ||
       serverContent?.model_turn ||
