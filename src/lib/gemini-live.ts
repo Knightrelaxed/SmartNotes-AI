@@ -235,26 +235,34 @@ export class GeminiLiveClient {
     const serverContent = message.serverContent || message.server_content;
 
     // Server content turn
-    if (serverContent) {
-      const modelTurn = serverContent.modelTurn || serverContent.model_turn;
-      const turnComplete = serverContent.turnComplete ?? serverContent.turn_complete;
+    const modelTurn =
+      serverContent?.modelTurn ||
+      serverContent?.model_turn ||
+      message?.modelTurn ||
+      message?.model_turn ||
+      message?.candidates?.[0]?.content;
 
-      if (modelTurn?.parts) {
-        for (const part of modelTurn.parts) {
-          const textChunk = part.text || part.transcript || '';
-          if (textChunk) {
-            this.accumulatedText += textChunk;
-            this.onTranscript?.(this.accumulatedText, false);
-          }
+    const turnComplete =
+      serverContent?.turnComplete ??
+      serverContent?.turn_complete ??
+      message?.turnComplete ??
+      message?.turn_complete;
+
+    if (modelTurn?.parts) {
+      for (const part of modelTurn.parts) {
+        const textChunk = part.text || part.transcript || '';
+        if (textChunk) {
+          this.accumulatedText += textChunk;
+          this.onTranscript?.(this.accumulatedText, false);
         }
       }
+    }
 
-      if (turnComplete) {
-        if (this.accumulatedText.trim()) {
-          this.onTranscript?.(this.accumulatedText.trim(), true);
-        }
-        this.accumulatedText = '';
+    if (turnComplete) {
+      if (this.accumulatedText.trim()) {
+        this.onTranscript?.(this.accumulatedText.trim(), true);
       }
+      this.accumulatedText = '';
     }
   }
 }

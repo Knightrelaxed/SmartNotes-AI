@@ -5,13 +5,12 @@
 
 export class AudioPCMStreamer {
   private audioContext: AudioContext | null = null;
-  private mediaStream: MediaStream | null = null;
   private processorNode: ScriptProcessorNode | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private gainNode: GainNode | null = null;
   private isStreaming = false;
   private targetSampleRate = 16000;
   private onChunkCallback: ((base64Pcm: string) => void) | null = null;
+  private ownsAudioContext = false;
 
   constructor(targetSampleRate = 16000) {
     this.targetSampleRate = targetSampleRate;
@@ -19,29 +18,44 @@ export class AudioPCMStreamer {
 
   public start(
     stream: MediaStream,
-    onChunk: (base64Pcm: string) => void
+    onChunk: (base64Pcm: string) => void,
+    existingContext?: AudioContext,
+    existingSource?: MediaStreamAudioSourceNode
   ): void {
     if (this.isStreaming) {
       this.stop();
     }
 
-    this.mediaStream = stream;
     this.onChunkCallback = onChunk;
     this.isStreaming = true;
 
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    this.audioContext = new AudioContextClass();
+    if (existingContext && existingSource) {
+      this.audioContext = existingContext;
+      this.sourceNode = existingSource;
+      this.ownsAudioContext = false;
+    } else {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      this.audioContext = new AudioContextClass();
+      this.sourceNode = this.audioContext.createMediaStreamSource(stream);
+      this.ownsAudioContext = true;
+    }
+
     if (this.audioContext.state === 'suspended') {
       this.audioContext.resume().catch(() => {});
     }
-
-    this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
 
     // Buffer size of 4096 gives approx 85ms chunks at 48kHz, responsive & low-latency
     const bufferSize = 4096;
     this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
     this.processorNode.onaudioprocess = (event) => {
+      // 1. Zero out the output buffer so speaker hears complete silence (prevents feedback loop)
+      // without using a 0-gain node which causes Chrome to prune and stop onaudioprocess!
+      const outputBuffer = event.outputBuffer.getChannelData(0);
+      for (let i = 0; i < outputBuffer.length; i++) {
+        outputBuffer[i] = 0;
+      }
+
       if (!this.isStreaming || !this.onChunkCallback) return;
 
       const inputBuffer = event.inputBuffer.getChannelData(0);
@@ -65,13 +79,9 @@ export class AudioPCMStreamer {
       }
     };
 
-    // Mute destination to prevent microphone loopback echo
-    this.gainNode = this.audioContext.createGain();
-    this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-
+    // Connect processor to source and destination
     this.sourceNode.connect(this.processorNode);
-    this.processorNode.connect(this.gainNode);
-    this.gainNode.connect(this.audioContext.destination);
+    this.processorNode.connect(this.audioContext.destination);
   }
 
   public pause(): void {
@@ -89,24 +99,32 @@ export class AudioPCMStreamer {
     this.isStreaming = false;
     this.onChunkCallback = null;
 
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
-    }
-
     if (this.processorNode) {
-      this.processorNode.disconnect();
-      this.processorNode.onaudioprocess = null;
+      try {
+        this.processorNode.disconnect();
+        this.processorNode.onaudioprocess = null;
+      } catch {
+        // Ignore
+      }
       this.processorNode = null;
     }
 
-    if (this.gainNode) {
-      this.gainNode.disconnect();
-      this.gainNode = null;
-    }
+    if (this.ownsAudioContext) {
+      if (this.sourceNode) {
+        try {
+          this.sourceNode.disconnect();
+        } catch {
+          // Ignore
+        }
+        this.sourceNode = null;
+      }
 
-    if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close().catch(() => {});
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        this.audioContext.close().catch(() => {});
+        this.audioContext = null;
+      }
+    } else {
+      this.sourceNode = null;
       this.audioContext = null;
     }
   }
@@ -124,7 +142,7 @@ export class AudioPCMStreamer {
     }
 
     if (inputRate < outputRate) {
-      return buffer; // Upsampling not needed
+      return buffer;
     }
 
     const sampleRateRatio = inputRate / outputRate;

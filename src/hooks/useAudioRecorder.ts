@@ -329,10 +329,16 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       });
       streamRef.current = stream;
 
-      // Set up audio context for visualization
-      audioContextRef.current = new AudioContext({ sampleRate: sampleRate });
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
+      // Set up audio context for visualization and ensure active running state
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioContextClass({ sampleRate: sampleRate });
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      audioContextRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyserRef.current = audioCtx.createAnalyser();
       analyserRef.current.fftSize = 1024;
       analyserRef.current.smoothingTimeConstant = 0.85;
       source.connect(analyserRef.current);
@@ -438,13 +444,18 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
             geminiLiveRef.current = client;
             await client.connect();
 
-            // Stream 16kHz PCM audio
+            // Stream 16kHz PCM audio sharing the active AudioContext and source node
             const streamer = new AudioPCMStreamer(16000);
-            streamer.start(stream, (base64Chunk) => {
-              if (client.isConnected()) {
-                client.sendAudioChunk(base64Chunk);
-              }
-            });
+            streamer.start(
+              stream,
+              (base64Chunk) => {
+                if (client.isConnected()) {
+                  client.sendAudioChunk(base64Chunk);
+                }
+              },
+              audioCtx,
+              source
+            );
             audioStreamerRef.current = streamer;
           } catch (err: any) {
             console.error('[useAudioRecorder] Gagal menghubungkan Gemini Live:', err);
