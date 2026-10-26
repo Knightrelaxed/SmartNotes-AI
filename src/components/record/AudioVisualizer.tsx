@@ -9,7 +9,7 @@ export function AudioVisualizer({ bars = 20 }: AudioVisualizerProps) {
   const { audioLevel } = useRecordStore();
 
   return (
-    <div className="flex items-center justify-center gap-0.5 h-12">
+    <div className="flex items-center justify-center gap-0.5 h-8">
       {Array.from({ length: bars }).map((_, i) => {
         // Vary height naturally across bars without calling non-deterministic math during render
         const multiplier = 0.5 + ((i % 5) / 10);

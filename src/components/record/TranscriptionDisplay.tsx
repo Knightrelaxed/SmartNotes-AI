@@ -59,26 +59,26 @@ export function TranscriptionDisplay({
 
   return (
     <Card className="border-0 shadow-lg">
-      <CardHeader className="border-b border-gray-100 dark:border-gray-800">
+      <CardHeader className="py-2.5 px-4 sm:px-6 border-b border-gray-100 dark:border-gray-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Type className="w-5 h-5 text-[#6C63FF]" />
-            <h3 className="font-semibold text-gray-900 dark:text-white">Transkripsi Langsung</h3>
+            <Type className="w-4 h-4 text-[#6C63FF]" />
+            <h3 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white">Transkripsi Langsung</h3>
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-500">
+          <div className="flex items-center gap-4 text-xs sm:text-sm text-gray-500">
             <AnimatePresence>
               {lastAutoSave && (
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-full text-xs font-medium text-green-600 dark:text-green-400 shadow-sm"
+                  className="flex items-center gap-1.5 px-2.5 py-0.5 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-full text-xs font-medium text-green-600 dark:text-green-400 shadow-xs"
                 >
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>
-                  Draft tersimpan {lastAutoSave.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                  Draft {lastAutoSave.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -97,7 +97,7 @@ export function TranscriptionDisplay({
             )}
 
             <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
+              <Clock className="w-3.5 h-3.5" />
               {formatDuration(duration)}
             </span>
             <span>{wordCount} kata</span>
@@ -109,37 +109,37 @@ export function TranscriptionDisplay({
         <div
           ref={transcriptionRef}
           onScroll={handleTranscriptionScroll}
-          className="h-[400px] overflow-y-auto p-6 space-y-4 scrollbar-thin relative"
+          className="h-[360px] sm:h-[400px] overflow-y-auto p-4 sm:p-6 space-y-3.5 scrollbar-thin relative"
         >
           {segments.length === 0 && !currentText && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-6">
               {state === 'recording' ? (
                 <>
-                  <div className="flex items-center gap-1.5 mb-3">
+                  <div className="flex items-center gap-1.5 mb-2.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
                   </div>
-                  <p className="font-medium text-gray-700 dark:text-gray-300">Sedang mendengarkan ucapan...</p>
-                  <p className="text-xs text-gray-400 mt-1">Bicaralah ke mikrofon atau putar audio perkuliahan</p>
+                  <p className="font-medium text-sm text-gray-700 dark:text-gray-300">Sedang mendengarkan ucapan...</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Bicaralah ke mikrofon atau putar audio perkuliahan</p>
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4 max-w-sm mx-auto">
-                  <div className="w-16 h-16 rounded-2xl bg-[#6C63FF]/10 text-[#6C63FF] flex items-center justify-center mb-4 shadow-sm">
-                    <Mic className="w-8 h-8" />
+                  <div className="w-12 h-12 rounded-xl bg-[#6C63FF]/10 text-[#6C63FF] flex items-center justify-center mb-3 shadow-xs">
+                    <Mic className="w-6 h-6" />
                   </div>
-                  <h4 className="font-semibold text-base text-gray-900 dark:text-white mb-1">
+                  <h4 className="font-semibold text-sm sm:text-base text-gray-900 dark:text-white mb-1">
                     Siap Mentranskripsi Audio
                   </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-5 leading-relaxed">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">
                     Bicaralah ke mikrofon atau putar audio perkuliahan, rapat, atau percakapan. Gemini 3.5 Live akan menyalin langsung dengan tanda baca akurat.
                   </p>
                   {onStartRecord && (
                     <Button
                       onClick={onStartRecord}
-                      size="default"
-                      className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] hover:opacity-90 text-white shadow-md shadow-[#6C63FF]/20 px-6 font-medium rounded-xl flex items-center gap-2 group transition-all"
+                      size="sm"
+                      className="h-9 bg-gradient-to-r from-[#6C63FF] to-[#5548E8] hover:opacity-90 text-white shadow-sm shadow-[#6C63FF]/20 px-5 text-xs font-medium rounded-lg flex items-center gap-2 group transition-all"
                     >
-                      <Mic className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                      <Mic className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
                       Mulai Rekam Sekarang
                     </Button>
                   )}

@@ -282,7 +282,7 @@ export function RecordPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3.5 sm:space-y-4">
       {/* Onboarding Guide for New Users */}
       {showOnboarding && notes.length === 0 && state === 'idle' && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-[#6C63FF]/10 via-[#5548E8]/10 to-[#FF6584]/10 border border-[#6C63FF]/20 flex items-start justify-between gap-4 shadow-sm">
