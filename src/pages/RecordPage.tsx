@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { Sparkles, X } from 'lucide-react';
 import { useRecordStore } from '@/store/recordStore';
 import { useNotesStore } from '@/store/notesStore';
 import { useUIStore } from '@/store/uiStore';
@@ -6,7 +7,7 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useAI } from '@/hooks/useAI';
 import { useFirebase } from '@/hooks/useFirebase';
 import { useSettingsStore } from '@/store/settingsStore';
-import { formatDate } from '@/utils/formatters';
+import { formatDate, formatDuration } from '@/utils/formatters';
 import { DraftRestoreBanner } from '@/components/record/DraftRestoreBanner';
 import { RecordControls } from '@/components/record/RecordControls';
 import { TranscriptionDisplay } from '@/components/record/TranscriptionDisplay';
@@ -26,7 +27,7 @@ export function RecordPage() {
     addSegment,
   } = useRecordStore();
 
-  const { addNote, updateNote, addSubject, subjects } = useNotesStore();
+  const { notes, addNote, updateNote, addSubject, subjects } = useNotesStore();
   const { addToast, setCurrentPage } = useUIStore();
   const {
     startRecording,
@@ -45,7 +46,15 @@ export function RecordPage() {
   const [noteTitle, setNoteTitle] = useState('');
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   const [showRestoreDraft, setShowRestoreDraft] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(true);
   const autoSaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleAddBookmark = () => {
+    if (state !== 'recording') return;
+    const timeStr = formatDuration(getDuration());
+    addSegment(`⭐ [POIN PENTING - ${timeStr}]`, true);
+    addToast({ type: 'info', message: `Poin penting ditandai (${timeStr})` });
+  };
 
   // Check for existing draft on mount
   useEffect(() => {
@@ -235,6 +244,7 @@ export function RecordPage() {
             summary: aiResult.summary || '',
             keywords: aiResult.keywords || [],
             outline: aiResult.outline || [],
+            flashcards: aiResult.flashcards || [],
           };
 
           updateNote(noteId, updatedNote);
@@ -273,6 +283,45 @@ export function RecordPage() {
 
   return (
     <div className="space-y-6">
+      {/* Onboarding Guide for New Users */}
+      {showOnboarding && notes.length === 0 && state === 'idle' && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#6C63FF]/10 via-[#5548E8]/10 to-[#FF6584]/10 border border-[#6C63FF]/20 flex items-start justify-between gap-4 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#6C63FF] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm text-gray-900 dark:text-white mb-1">
+                Panduan Memulai Cepat
+              </h4>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-gray-600 dark:text-gray-300">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="w-4 h-4 rounded-full bg-[#6C63FF]/20 text-[#6C63FF] flex items-center justify-center text-[10px] font-bold">1</span>
+                  Pilih mata kuliah
+                </span>
+                <span className="text-gray-400">→</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="w-4 h-4 rounded-full bg-[#6C63FF]/20 text-[#6C63FF] flex items-center justify-center text-[10px] font-bold">2</span>
+                  Klik Mulai Merekam
+                </span>
+                <span className="text-gray-400">→</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="w-4 h-4 rounded-full bg-[#6C63FF]/20 text-[#6C63FF] flex items-center justify-center text-[10px] font-bold">3</span>
+                  AI otomatis mentranskripsi & membuat kartu belajar
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowOnboarding(false)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+            title="Tutup panduan"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Draft Restore Notice */}
       <DraftRestoreBanner
         show={showRestoreDraft}
@@ -296,6 +345,7 @@ export function RecordPage() {
         onPause={pauseRecording}
         onResume={resumeRecording}
         onStop={handleStop}
+        onAddBookmark={handleAddBookmark}
         engine={engine}
         isLiveConnected={isLiveConnected}
       />

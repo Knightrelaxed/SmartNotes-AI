@@ -83,36 +83,48 @@ export function StudyCharts({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={subjectData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {subjectData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card, 222 47% 11%))',
-                    border: '1px solid hsl(var(--border, 217 33% 17%))',
-                    borderRadius: '8px',
-                    color: 'hsl(var(--foreground, 210 40% 98%))',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-                  }}
-                  itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
-                  labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
-                  formatter={(value: any) => [`${value} menit`, 'Durasi']}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            {subjectData.length === 0 ? (
+              <div className="h-[250px] flex flex-col items-center justify-center text-center px-4">
+                <BookOpen className="w-10 h-10 text-gray-300 dark:text-gray-700 mb-2" />
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Belum ada distribusi mata kuliah
+                </p>
+                <p className="text-xs text-gray-400 mt-1 max-w-xs">
+                  Pilih atau tambahkan mata kuliah saat merekam materi untuk melihat grafik pembagian waktu belajar.
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={subjectData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {subjectData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card, 222 47% 11%))',
+                      border: '1px solid hsl(var(--border, 217 33% 17%))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground, 210 40% 98%))',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
+                    formatter={(value: any) => [`${value} menit`, 'Durasi']}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -128,32 +140,44 @@ export function StudyCharts({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={wordCountTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(156, 163, 175, 0.2)" />
-                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card, 222 47% 11%))',
-                    border: '1px solid hsl(var(--border, 217 33% 17%))',
-                    borderRadius: '8px',
-                    color: 'hsl(var(--foreground, 210 40% 98%))',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-                  }}
-                  itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
-                  labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
-                  formatter={(value: any) => [`${value} kata`, 'Jumlah']}
-                />
-                <Line
-                  type="linear"
-                  dataKey="words"
-                  stroke="#4CAF50"
-                  strokeWidth={2}
-                  dot={{ fill: '#4CAF50', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {wordCountTrend.length === 0 ? (
+              <div className="h-[250px] flex flex-col items-center justify-center text-center px-4">
+                <TrendingUp className="w-10 h-10 text-gray-300 dark:text-gray-700 mb-2" />
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Belum ada catatan
+                </p>
+                <p className="text-xs text-gray-400 mt-1 max-w-xs">
+                  Mulai simpan rekaman atau catatan untuk melihat grafik perkembangan jumlah kata materi Anda.
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={wordCountTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(156, 163, 175, 0.2)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card, 222 47% 11%))',
+                      border: '1px solid hsl(var(--border, 217 33% 17%))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground, 210 40% 98%))',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))' }}
+                    labelStyle={{ color: 'hsl(var(--foreground, 210 40% 98%))', fontWeight: 600 }}
+                    formatter={(value: any) => [`${value} kata`, 'Jumlah']}
+                  />
+                  <Line
+                    type="linear"
+                    dataKey="words"
+                    stroke="#4CAF50"
+                    strokeWidth={2}
+                    dot={{ fill: '#4CAF50', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 

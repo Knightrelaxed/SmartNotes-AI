@@ -11,6 +11,7 @@ export interface Note {
   summary?: string;
   keywords?: string[];
   outline?: string[];
+  flashcards?: { question: string; answer: string }[];
 }
 
 // Recording state types

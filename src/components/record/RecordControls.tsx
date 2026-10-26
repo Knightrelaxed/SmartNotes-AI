@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mic, Pause, Play, Square, Sparkles, Radio, Plus } from 'lucide-react';
+import { Mic, Pause, Play, Square, Sparkles, Radio, Plus, Bookmark } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ interface RecordControlsProps {
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
+  onAddBookmark?: () => void;
   engine?: 'gemini-live' | 'web-speech';
   isLiveConnected?: boolean;
 }
@@ -36,6 +37,7 @@ export function RecordControls({
   onPause,
   onResume,
   onStop,
+  onAddBookmark,
   engine = 'gemini-live',
   isLiveConnected = false,
 }: RecordControlsProps) {
@@ -237,6 +239,18 @@ export function RecordControls({
                 </Button>
               ) : state === 'recording' ? (
                 <>
+                  {onAddBookmark && (
+                    <Button
+                      onClick={onAddBookmark}
+                      variant="outline"
+                      size="lg"
+                      className="border-amber-400 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 px-3 md:px-4 flex items-center gap-1.5"
+                      title="Tandai poin penting / ujian pada transkrip saat ini"
+                    >
+                      <Bookmark className="w-4 h-4 fill-amber-400 text-amber-500" />
+                      <span className="hidden sm:inline">Penting</span>
+                    </Button>
+                  )}
                   <Button
                     onClick={onPause}
                     variant="outline"

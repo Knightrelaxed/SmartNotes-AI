@@ -20,6 +20,8 @@ import {
   MessageSquare,
   Eraser,
   X,
+  RotateCw,
+  Shuffle,
 } from 'lucide-react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -65,6 +67,8 @@ export function ViewNoteDialog({
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [copiedTranscript, setCopiedTranscript] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [showFlashcardAnswer, setShowFlashcardAnswer] = useState(false);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
@@ -208,7 +212,7 @@ ${note.content}
         generateSummary: true,
         extractKeywords: true,
         createOutline: true,
-        generateFlashcards: false,
+        generateFlashcards: true,
         language: 'id',
       });
       if (res && !res.error && res.summary) {
@@ -219,8 +223,9 @@ ${note.content}
           summary: res.summary,
           keywords: res.keywords || [],
           outline: res.outline || [],
+          flashcards: res.flashcards || [],
         });
-        addToast({ type: 'success', message: 'Ringkasan AI berhasil diperbarui!' });
+        addToast({ type: 'success', message: 'Ringkasan & Flashcards AI berhasil diperbarui!' });
       } else {
         addToast({ type: 'error', message: res?.error || 'Gagal memproses AI.' });
       }
@@ -323,19 +328,25 @@ ${note.content}
           <TabsList className="w-full justify-start border-b border-gray-100 dark:border-gray-800 rounded-none bg-transparent h-12 p-0 mb-4 px-2 shrink-0">
             <TabsTrigger
               value="ringkasan"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-5 bg-transparent font-medium"
             >
               Ringkasan AI
             </TabsTrigger>
             <TabsTrigger
               value="transkrip"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-5 bg-transparent font-medium"
             >
-              Transkrip Lengkap
+              Transkrip
+            </TabsTrigger>
+            <TabsTrigger
+              value="flashcards"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-5 bg-transparent font-medium"
+            >
+              Flashcards {note.flashcards && note.flashcards.length > 0 ? `(${note.flashcards.length})` : ''}
             </TabsTrigger>
             <TabsTrigger
               value="chat"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-6 bg-transparent font-medium"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-[#6C63FF] data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-[#6C63FF] h-12 px-5 bg-transparent font-medium"
             >
               Tanya AI
             </TabsTrigger>
@@ -511,6 +522,114 @@ ${note.content}
                 {note.content || 'Transkripsi kosong.'}
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="flashcards" className="flex-1 flex flex-col min-h-0 m-0 data-[state=inactive]:hidden px-2 pb-2">
+            {note.flashcards && note.flashcards.length > 0 ? (
+              <div className="flex-1 flex flex-col overflow-y-auto py-2 px-1 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-[#6C63FF]" />
+                    <span className="font-semibold text-sm text-gray-900 dark:text-white">
+                      Kartu {flashcardIndex + 1} dari {note.flashcards.length}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400">Klik kartu untuk membalik</span>
+                </div>
+
+                {/* Interactive Flashcard */}
+                <div
+                  onClick={() => setShowFlashcardAnswer(!showFlashcardAnswer)}
+                  className="min-h-[220px] p-6 rounded-3xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-white via-white to-[#6C63FF]/5 dark:from-gray-900 dark:via-gray-900 dark:to-[#6C63FF]/15 shadow-sm hover:shadow-md cursor-pointer transition-all flex flex-col justify-between select-none group"
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className={cn(
+                        "text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full",
+                        showFlashcardAnswer
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-[#6C63FF]/10 text-[#6C63FF]"
+                      )}>
+                        {showFlashcardAnswer ? 'Jawaban' : 'Pertanyaan'}
+                      </span>
+                      <RotateCw className="w-4 h-4 text-gray-400 group-hover:rotate-180 transition-transform duration-500" />
+                    </div>
+                    <p className="mt-4 text-base md:text-lg font-medium text-gray-900 dark:text-white leading-relaxed">
+                      {showFlashcardAnswer
+                        ? note.flashcards[flashcardIndex].answer
+                        : note.flashcards[flashcardIndex].question}
+                    </p>
+                  </div>
+                  <div className="mt-6 pt-3 border-t border-gray-100 dark:border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
+                    <span>{showFlashcardAnswer ? 'Klik kartu untuk kembali ke pertanyaan' : 'Klik kartu untuk menampilkan jawaban'}</span>
+                    <span className="text-[#6C63FF] font-semibold">
+                      {showFlashcardAnswer ? 'Tutup Jawaban' : 'Lihat Jawaban →'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Controls */}
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={flashcardIndex === 0}
+                    onClick={() => {
+                      setFlashcardIndex((prev) => Math.max(0, prev - 1));
+                      setShowFlashcardAnswer(false);
+                    }}
+                    className="h-9 px-4 text-xs font-medium"
+                  >
+                    ← Sebelumnya
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const rand = Math.floor(Math.random() * note.flashcards!.length);
+                      setFlashcardIndex(rand);
+                      setShowFlashcardAnswer(false);
+                    }}
+                    className="h-9 px-3 text-xs text-gray-500 hover:text-[#6C63FF]"
+                  >
+                    <Shuffle className="w-3.5 h-3.5 mr-1.5" />
+                    Acak Kartu
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={flashcardIndex === note.flashcards.length - 1}
+                    onClick={() => {
+                      setFlashcardIndex((prev) => Math.min(note.flashcards!.length - 1, prev + 1));
+                      setShowFlashcardAnswer(false);
+                    }}
+                    className="h-9 px-4 text-xs font-medium"
+                  >
+                    Selanjutnya →
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center p-6 bg-gray-50/70 dark:bg-gray-800/30 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700 m-2">
+                <div className="w-12 h-12 rounded-2xl bg-[#6C63FF]/10 text-[#6C63FF] flex items-center justify-center mb-3">
+                  <Layers className="w-6 h-6" />
+                </div>
+                <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
+                  Belum Ada Kartu Belajar (Flashcards)
+                </h4>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mb-5">
+                  Buat kartu latihan tanya-jawab otomatis dari materi catatan ini untuk menguji pemahaman Anda.
+                </p>
+                <Button
+                  onClick={handleReprocessAI}
+                  disabled={isReprocessing}
+                  className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] text-white shadow-md shadow-[#6C63FF]/20"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  {isReprocessing ? 'Memproses Flashcards...' : 'Hasilkan Flashcards dengan AI'}
+                </Button>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 m-0 data-[state=inactive]:hidden px-2 pb-2">

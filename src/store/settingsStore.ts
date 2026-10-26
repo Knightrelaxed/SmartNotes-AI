@@ -23,7 +23,7 @@ const defaultSettings: AppSettings = {
     autoSummarize: true,
     autoExtractKeywords: true,
     autoCreateOutline: true,
-    generateFlashcards: false,
+    generateFlashcards: true,
   },
   interface: {
     theme: 'auto',

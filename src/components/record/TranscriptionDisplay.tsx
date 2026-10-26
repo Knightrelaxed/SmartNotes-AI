@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Type, Clock, Wand2, Mic } from 'lucide-react';
+import { Type, Clock, Wand2, Mic, Bookmark } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatDuration } from '@/utils/formatters';
@@ -157,14 +157,21 @@ export function TranscriptionDisplay({
                 exit={{ opacity: 0 }}
                 className="group"
               >
-                <div className="flex items-start gap-3">
-                  <span className="text-xs text-gray-400 font-mono mt-1">
-                    {format(segment.timestamp, 'HH:mm:ss')}
-                  </span>
-                  <p className="flex-1 text-gray-700 dark:text-gray-300 leading-relaxed">
-                    {segment.text}
-                  </p>
-                </div>
+                {segment.text.includes('[POIN PENTING') ? (
+                  <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-semibold text-xs my-1 shadow-sm">
+                    <Bookmark className="w-4 h-4 fill-amber-500 text-amber-500 shrink-0" />
+                    <span>{segment.text}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <span className="text-xs text-gray-400 font-mono mt-1">
+                      {format(segment.timestamp, 'HH:mm:ss')}
+                    </span>
+                    <p className="flex-1 text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {segment.text}
+                    </p>
+                  </div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>
