@@ -109,13 +109,23 @@ export const useRecordStore = create<RecordState>((set, get) => ({
   },
 
   addSegment: (text, isFinal = true) => {
-    const segment: TranscriptionSegment = {
-      id: Date.now().toString(),
-      timestamp: new Date(),
-      text,
-      isFinal,
-    };
-    set((state) => ({ segments: [...state.segments, segment] }));
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    set((state) => {
+      // Prevent consecutive identical segments
+      const lastSeg = state.segments[state.segments.length - 1];
+      if (lastSeg && lastSeg.text.trim().toLowerCase() === cleanText.toLowerCase()) {
+        return state;
+      }
+      const segment: TranscriptionSegment = {
+        id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 6),
+        timestamp: new Date(),
+        text: cleanText,
+        isFinal,
+      };
+      return { segments: [...state.segments, segment] };
+    });
   },
 
   updateCurrentText: (text) => {

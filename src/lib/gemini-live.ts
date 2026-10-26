@@ -6,6 +6,7 @@
 export interface GeminiLiveOptions {
   apiKey: string;
   model?: string;
+  languageCodes?: string[];
   systemInstruction?: string;
   onConnected?: () => void;
   onDisconnected?: (reason?: string) => void;
@@ -17,9 +18,11 @@ export class GeminiLiveClient {
   private socket: WebSocket | null = null;
   private apiKey: string;
   private model: string;
+  private languageCodes: string[];
   private systemInstruction: string;
   private isSetupComplete = false;
   private isConnecting = false;
+  private hasReceivedInputTranscription = false;
   private accumulatedText = '';
 
   private onConnected?: () => void;
@@ -30,9 +33,17 @@ export class GeminiLiveClient {
   constructor(options: GeminiLiveOptions) {
     this.apiKey = options.apiKey;
     this.model = options.model || 'models/gemini-3.5-transcribe-live';
+    this.languageCodes = options.languageCodes || ['id-ID', 'id', 'en-US', 'en'];
     this.systemInstruction =
       options.systemInstruction ||
-      'Transkripsikan audio perkuliahan yang didengar secara akurat ke dalam bahasa Indonesia atau Inggris. Berikan tanda baca lengkap, kapitalisasi yang tepat, dan pertahankan istilah ilmiah, teknis, atau matematika. Hanya keluarkan teks hasil transkripsi tanpa komentar.';
+      `PERAN & TUGAS UTAMA:
+Kamu adalah mesin Speech-to-Text (Transkriptor Audio Langsung) khusus perkuliahan dan percakapan.
+1. Transkripsikan HANYA apa yang diucapkan pembicara secara persis apa adanya dalam Bahasa Indonesia atau Bahasa Inggris.
+2. Gunakan HANYA karakter alfabet Latin (A-Z, a-z), angka, dan tanda baca standar.
+3. JANGAN PERNAH mengeluarkan huruf/aksara non-Latin (seperti aksara Arab, Hindi/Devanagari, Sirilik, Mandarin, Thai, dll).
+4. JANGAN PERNAH merespons percakapan, jangan menjawab pertanyaan, jangan menambahkan kata sapaan, jangan membuat komentar AI sendiri.
+5. Jika pembicara hening, atau hanya terdengar desis mikrofon / derau ruangan, JANGAN mengeluarkan teks sama sekali.
+6. Pertahankan istilah teknis, medis, ilmiah, dan singkatan akademis secara akurat.`;
     this.onConnected = options.onConnected;
     this.onDisconnected = options.onDisconnected;
     this.onError = options.onError;
@@ -53,6 +64,7 @@ export class GeminiLiveClient {
 
       this.isConnecting = true;
       this.isSetupComplete = false;
+      this.hasReceivedInputTranscription = false;
 
       let isSettled = false;
       const safeResolve = () => {
@@ -172,6 +184,7 @@ export class GeminiLiveClient {
   public disconnect(): void {
     this.isSetupComplete = false;
     this.isConnecting = false;
+    this.hasReceivedInputTranscription = false;
 
     if (this.socket) {
       this.socket.onopen = null;
@@ -204,8 +217,13 @@ export class GeminiLiveClient {
         model: formattedModel,
         generationConfig: {
           responseModalities: ['TEXT'],
+          inputAudioTranscription: {
+            languageCodes: this.languageCodes,
+          },
         },
-        inputAudioTranscription: {},
+        inputAudioTranscription: {
+          languageCodes: this.languageCodes,
+        },
         outputAudioTranscription: {},
         systemInstruction: {
           parts: [
@@ -223,6 +241,48 @@ export class GeminiLiveClient {
     } catch (e) {
       console.error('[GeminiLive] Error sending setup message:', e);
     }
+  }
+
+  /**
+   * Filter out acoustic hallucinations such as Arabic/Hindi scripts,
+   * conversational bot greetings, or subtitle artifacts during mic pauses.
+   */
+  private filterHallucinations(text: string): string {
+    if (!text) return '';
+
+    // 1. Discard non-Latin scripts (Arabic, Devanagari/Hindi, Cyrillic, Thai, CJK, etc.)
+    const nonLatinRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/;
+    if (nonLatinRegex.test(text)) {
+      console.warn('[GeminiLive] Discarded hallucinated non-Latin script:', text);
+      return '';
+    }
+
+    // 2. Discard common repetitive YouTube/Whisper/AI hallucination phrases
+    const lower = text.trim().toLowerCase();
+    const bannedPhrases = [
+      'subtitles by',
+      'terima kasih telah menonton',
+      'terima kasih sudah menonton',
+      'jangan lupa subscribe',
+      'like and subscribe',
+      'thank you for watching',
+      'amara.org',
+      'halo! apa yang bisa saya bantu',
+      'halo, apa yang bisa saya bantu',
+      'bagaimana saya bisa membantu',
+      'ada yang bisa saya bantu',
+      'sure, i am ready',
+      'how can i help you today',
+    ];
+
+    for (const phrase of bannedPhrases) {
+      if (lower === phrase || (lower.startsWith(phrase) && lower.length < phrase.length + 15)) {
+        console.warn('[GeminiLive] Discarded bot response/filler hallucination:', text);
+        return '';
+      }
+    }
+
+    return text;
   }
 
   private handleServerMessage(message: any): void {
@@ -245,10 +305,12 @@ export class GeminiLiveClient {
       message?.interim_input_transcription;
 
     if (interim) {
-      const interimText = typeof interim === 'string' ? interim : interim.text || interim.transcript || '';
-      if (interimText.trim()) {
-        console.log('[GeminiLive] Real-time interim speech:', interimText);
-        this.onTranscript?.(interimText.trim(), false);
+      const rawText = typeof interim === 'string' ? interim : interim.text || interim.transcript || '';
+      const cleanText = this.filterHallucinations(rawText);
+      if (cleanText.trim()) {
+        this.hasReceivedInputTranscription = true;
+        console.log('[GeminiLive] Real-time interim speech:', cleanText);
+        this.onTranscript?.(cleanText.trim(), false);
       }
     }
 
@@ -262,42 +324,48 @@ export class GeminiLiveClient {
       message?.audio_transcription;
 
     if (finalized) {
-      const finalizedText = typeof finalized === 'string' ? finalized : finalized.text || finalized.transcript || '';
-      if (finalizedText.trim()) {
-        console.log('[GeminiLive] Finalized speech segment:', finalizedText);
-        this.onTranscript?.(finalizedText.trim(), true);
+      const rawText = typeof finalized === 'string' ? finalized : finalized.text || finalized.transcript || '';
+      const cleanText = this.filterHallucinations(rawText);
+      if (cleanText.trim()) {
+        this.hasReceivedInputTranscription = true;
+        console.log('[GeminiLive] Finalized speech segment:', cleanText);
+        this.onTranscript?.(cleanText.trim(), true);
       }
     }
 
     // 3. Fallback for modelTurn generation parts
-    const modelTurn =
-      serverContent?.modelTurn ||
-      serverContent?.model_turn ||
-      message?.modelTurn ||
-      message?.model_turn ||
-      message?.candidates?.[0]?.content;
+    // ONLY used if inputTranscription is NOT active on this session to avoid duplicate delayed text.
+    if (!this.hasReceivedInputTranscription) {
+      const modelTurn =
+        serverContent?.modelTurn ||
+        serverContent?.model_turn ||
+        message?.modelTurn ||
+        message?.model_turn ||
+        message?.candidates?.[0]?.content;
 
-    const turnComplete =
-      serverContent?.turnComplete ??
-      serverContent?.turn_complete ??
-      message?.turnComplete ??
-      message?.turn_complete;
+      const turnComplete =
+        serverContent?.turnComplete ??
+        serverContent?.turn_complete ??
+        message?.turnComplete ??
+        message?.turn_complete;
 
-    if (modelTurn?.parts) {
-      for (const part of modelTurn.parts) {
-        const textChunk = part.text || part.transcript || '';
-        if (textChunk) {
-          this.accumulatedText += textChunk;
-          this.onTranscript?.(this.accumulatedText, false);
+      if (modelTurn?.parts) {
+        for (const part of modelTurn.parts) {
+          const rawChunk = part.text || part.transcript || '';
+          const cleanChunk = this.filterHallucinations(rawChunk);
+          if (cleanChunk) {
+            this.accumulatedText += cleanChunk;
+            this.onTranscript?.(this.accumulatedText, false);
+          }
         }
       }
-    }
 
-    if (turnComplete) {
-      if (this.accumulatedText.trim()) {
-        this.onTranscript?.(this.accumulatedText.trim(), true);
+      if (turnComplete) {
+        if (this.accumulatedText.trim()) {
+          this.onTranscript?.(this.accumulatedText.trim(), true);
+        }
+        this.accumulatedText = '';
       }
-      this.accumulatedText = '';
     }
   }
 }

@@ -405,10 +405,16 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           }
         } else {
           try {
+            const selectedLang = useSettingsStore.getState().transcription.language || 'id';
+            const languageCodes = selectedLang === 'id'
+              ? ['id-ID', 'id', 'en-US', 'en']
+              : ['en-US', 'en', 'id-ID', 'id'];
+
             const client = new GeminiLiveClient({
               apiKey: geminiApiKey,
+              languageCodes: languageCodes,
               systemInstruction:
-                'Transkripsikan audio perkuliahan yang didengar secara akurat ke dalam bahasa Indonesia atau Inggris. Berikan tanda baca lengkap, kapitalisasi yang tepat, dan pertahankan istilah akademis, ilmiah, atau matematika. Hanya keluarkan teks hasil transkripsi tanpa komentar apapun.',
+                'PERAN: Transkripsikan HANYA ucapan audio perkuliahan yang didengar secara akurat ke dalam Bahasa Indonesia atau Bahasa Inggris (huruf Latin). JANGAN PERNAH mengeluarkan aksara Arab, Devanagari/Hindi, atau aksara selain Latin. Berikan tanda baca lengkap, kapitalisasi tepat, dan pertahankan istilah akademis, ilmiah, atau matematika. Jangan merespons atau mengomentari audio.',
               onConnected: () => {
                 setIsLiveConnected(true);
                 console.log('[useAudioRecorder] Gemini 3.5 Transcribe Live aktif.');

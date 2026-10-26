@@ -1,7 +1,8 @@
 /**
  * Utility to convert browser microphone audio into 16kHz 16-bit linear PCM
  * chunks encoded in Base64 for Gemini Live API streaming.
- * Optimized for low latency (128ms pacing) with zero dropped frames.
+ * Includes intelligent noise gate, adaptive gain control (AGC),
+ * and standardized 100ms packet pacing (1600 samples).
  */
 
 export class AudioPCMStreamer {
@@ -12,6 +13,10 @@ export class AudioPCMStreamer {
   private targetSampleRate = 16000;
   private onChunkCallback: ((base64Pcm: string) => void) | null = null;
   private ownsAudioContext = false;
+  private sampleBuffer: Float32Array = new Float32Array(0);
+
+  // 100ms chunk at 16kHz is 1600 samples (optimal frame pacing for Gemini Live VAD)
+  private readonly CHUNK_SIZE = 1600;
 
   constructor(targetSampleRate = 16000) {
     this.targetSampleRate = targetSampleRate;
@@ -29,6 +34,7 @@ export class AudioPCMStreamer {
 
     this.onChunkCallback = onChunk;
     this.isStreaming = true;
+    this.sampleBuffer = new Float32Array(0);
 
     if (existingContext && existingSource) {
       this.audioContext = existingContext;
@@ -45,7 +51,7 @@ export class AudioPCMStreamer {
       this.audioContext.resume().catch(() => {});
     }
 
-    // Buffer size of 2048 samples at 16kHz gives ~128ms chunks (optimal for Google VAD)
+    // Buffer size of 2048 samples from Web Audio processor
     const bufferSize = 2048;
     this.processorNode = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
 
@@ -61,19 +67,28 @@ export class AudioPCMStreamer {
       const inputBuffer = event.inputBuffer.getChannelData(0);
       const inputSampleRate = event.inputBuffer.sampleRate;
 
-      // Downsample if input sample rate is different from target
+      // Downsample to 16kHz if browser audio context runs at 44.1kHz or 48kHz
       const downsampledBuffer = inputSampleRate === this.targetSampleRate
         ? inputBuffer
         : this.downsampleTo16k(inputBuffer, inputSampleRate, this.targetSampleRate);
 
-      // Convert Float32 to 16-bit signed integer linear PCM ArrayBuffer
-      const pcm16Buffer = this.floatTo16BitPCM(downsampledBuffer);
+      // Append new samples into the pacing buffer
+      const combined = new Float32Array(this.sampleBuffer.length + downsampledBuffer.length);
+      combined.set(this.sampleBuffer);
+      combined.set(downsampledBuffer, this.sampleBuffer.length);
+      this.sampleBuffer = combined;
 
-      // Fast Base64 string conversion
-      const base64Data = this.arrayBufferToBase64(pcm16Buffer);
+      // Flush in standardized 100ms chunks (1600 samples)
+      while (this.sampleBuffer.length >= this.CHUNK_SIZE) {
+        const chunk = this.sampleBuffer.subarray(0, this.CHUNK_SIZE);
+        this.sampleBuffer = this.sampleBuffer.slice(this.CHUNK_SIZE);
 
-      if (base64Data) {
-        this.onChunkCallback(base64Data);
+        const pcm16Buffer = this.processFloatTo16BitPCM(chunk);
+        const base64Data = this.arrayBufferToBase64(pcm16Buffer);
+
+        if (base64Data && this.onChunkCallback) {
+          this.onChunkCallback(base64Data);
+        }
       }
     };
 
@@ -84,10 +99,12 @@ export class AudioPCMStreamer {
 
   public pause(): void {
     this.isStreaming = false;
+    this.flushRemainingBuffer();
   }
 
   public resume(): void {
     this.isStreaming = true;
+    this.sampleBuffer = new Float32Array(0);
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume().catch(() => {});
     }
@@ -95,7 +112,9 @@ export class AudioPCMStreamer {
 
   public stop(): void {
     this.isStreaming = false;
+    this.flushRemainingBuffer();
     this.onChunkCallback = null;
+    this.sampleBuffer = new Float32Array(0);
 
     if (this.processorNode) {
       try {
@@ -128,18 +147,28 @@ export class AudioPCMStreamer {
   }
 
   /**
-   * Fast linear interpolation downsampler
+   * Flush residual audio buffer (at least 25ms) so trailing syllables aren't lost
+   */
+  private flushRemainingBuffer(): void {
+    if (this.sampleBuffer.length >= 400 && this.onChunkCallback) {
+      const pcm16Buffer = this.processFloatTo16BitPCM(this.sampleBuffer);
+      const base64Data = this.arrayBufferToBase64(pcm16Buffer);
+      if (base64Data) {
+        this.onChunkCallback(base64Data);
+      }
+    }
+    this.sampleBuffer = new Float32Array(0);
+  }
+
+  /**
+   * Linear interpolation downsampler to 16kHz
    */
   private downsampleTo16k(
     buffer: Float32Array,
     inputRate: number,
     outputRate: number
   ): Float32Array {
-    if (inputRate === outputRate) {
-      return buffer;
-    }
-
-    if (inputRate < outputRate) {
+    if (inputRate === outputRate || inputRate < outputRate) {
       return buffer;
     }
 
@@ -169,12 +198,39 @@ export class AudioPCMStreamer {
   }
 
   /**
-   * Convert Float32Array (-1.0 to 1.0) to 16-bit Signed Integer PCM ArrayBuffer (Little-Endian)
+   * Convert Float32Array to 16-bit Linear PCM with Noise Gate & Adaptive Gain Control (AGC)
    */
-  private floatTo16BitPCM(input: Float32Array): ArrayBuffer {
+  private processFloatTo16BitPCM(input: Float32Array): ArrayBuffer {
+    let peak = 0;
+    for (let i = 0; i < input.length; i++) {
+      const abs = Math.abs(input[i]);
+      if (abs > peak) peak = abs;
+    }
+
+    // 1. Intelligent Noise Gate:
+    // If peak < 0.0035 (ambient room hiss/aircon/silence), emit clean zeros.
+    // This tells Google's VAD that user has paused, cleanly closing segments
+    // and completely eliminating background hallucinations (Arabic, Hindi, etc.)
+    if (peak < 0.0035) {
+      return new Int16Array(input.length).buffer;
+    }
+
+    // 2. Adaptive Gain Booster:
+    // Target healthy speech level (around 0.65 peak)
+    // Max boost of 3.5x to ensure whisper/quiet laptop mics are crystal clear
+    let gain = 1.0;
+    if (peak < 0.25) {
+      gain = Math.min(3.5, 0.65 / Math.max(peak, 0.01));
+    } else if (peak > 0.85) {
+      gain = 0.85 / peak; // Soft attenuation for loud sounds
+    }
+
+    // 3. Convert to 16-bit Signed Integer PCM Little-Endian with soft saturation
     const pcm16 = new Int16Array(input.length);
     for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]));
+      let s = input[i] * gain;
+      if (s > 1.0) s = 1.0;
+      else if (s < -1.0) s = -1.0;
       pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
     }
     return pcm16.buffer;
