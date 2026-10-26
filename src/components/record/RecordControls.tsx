@@ -66,7 +66,7 @@ export function RecordControls({
                     : 'Siap Merekam'}
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {currentSubject ? `Mata Kuliah: ${currentSubject}` : 'Pilih mata kuliah untuk memulai'}
+                  {currentSubject ? `Mata Kuliah: ${currentSubject}` : 'Tanpa mata kuliah'}
                 </p>
               </div>
             </div>
@@ -75,10 +75,10 @@ export function RecordControls({
               <Select
                 value={currentSubject}
                 onValueChange={onSelectSubject}
-                disabled={state !== 'idle'}
+                disabled={state !== 'idle' || subjects.length === 0}
               >
-                <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800">
-                  <SelectValue placeholder="Pilih mata kuliah" />
+                <SelectTrigger className="w-[200px] bg-white dark:bg-gray-800">
+                  <SelectValue placeholder={subjects.length === 0 ? "Belum ada mata kuliah" : "Pilih mata kuliah"} />
                 </SelectTrigger>
                 <SelectContent>
                   {subjects.length > 0 ? (
@@ -93,14 +93,7 @@ export function RecordControls({
                         </span>
                       </SelectItem>
                     ))
-                  ) : (
-                    <SelectItem value="Umum">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
-                        Umum
-                      </span>
-                    </SelectItem>
-                  )}
+                  ) : null}
                 </SelectContent>
               </Select>
             </div>

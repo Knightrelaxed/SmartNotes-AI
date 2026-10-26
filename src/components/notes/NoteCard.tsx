@@ -36,12 +36,14 @@ export function NoteCard({ note, onView, onEdit, onDelete }: NoteCardProps) {
         <CardContent className="p-5">
           {/* Header */}
           <div className="flex items-start justify-between mb-3">
-            <div className={cn(
-              'px-2.5 py-1 rounded-full text-xs font-medium',
-              'bg-[#6C63FF]/10 text-[#6C63FF]'
-            )}>
-              {note.subject}
-            </div>
+            {note.subject ? (
+              <div className={cn(
+                'px-2.5 py-1 rounded-full text-xs font-medium',
+                'bg-[#6C63FF]/10 text-[#6C63FF]'
+              )}>
+                {note.subject}
+              </div>
+            ) : <div />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

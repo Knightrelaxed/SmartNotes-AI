@@ -140,7 +140,10 @@ export function RecordPage() {
   const handleStop = () => {
     stopRecording();
     setShowSaveDialog(true);
-    setNoteTitle(`Kuliah ${currentSubject || 'Umum'} - ${formatDate(new Date(), 'd MMMM yyyy')}`);
+    const defaultTitle = currentSubject
+      ? `${currentSubject} - ${formatDate(new Date(), 'd MMMM yyyy')}`
+      : `Catatan - ${formatDate(new Date(), 'd MMMM yyyy')}`;
+    setNoteTitle(defaultTitle);
   };
 
   const handleSave = async () => {
