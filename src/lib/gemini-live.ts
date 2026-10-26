@@ -54,7 +54,31 @@ export class GeminiLiveClient {
       this.isConnecting = true;
       this.isSetupComplete = false;
 
-      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+      let isSettled = false;
+      const safeResolve = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timeoutId);
+          resolve();
+        }
+      };
+      const safeReject = (err: Error) => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timeoutId);
+          reject(err);
+        }
+      };
+
+      // 10 second connection timeout to prevent hanging UI
+      const timeoutId = setTimeout(() => {
+        const timeoutErr = new Error('Batas waktu koneksi ke Gemini Live habis (10 detik). Periksa koneksi internet atau validitas API key Anda.');
+        this.onError?.(timeoutErr.message);
+        this.disconnect();
+        safeReject(timeoutErr);
+      }, 10000);
+
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
 
       try {
         this.socket = new WebSocket(wsUrl);
@@ -72,12 +96,22 @@ export class GeminiLiveClient {
               : await (event.data as Blob).text();
 
             const message = JSON.parse(rawData);
+
+            if (message.error) {
+              const errMsg = message.error.message || 'Error dari server Gemini Live';
+              console.error('[GeminiLive] Server error received:', errMsg);
+              this.onError?.(errMsg);
+              this.disconnect();
+              safeReject(new Error(errMsg));
+              return;
+            }
+
             this.handleServerMessage(message);
 
             if (!this.isSetupComplete) {
               this.isSetupComplete = true;
               this.onConnected?.();
-              resolve();
+              safeResolve();
             }
           } catch (e) {
             console.error('[GeminiLive] Error parsing message:', e);
@@ -86,25 +120,28 @@ export class GeminiLiveClient {
 
         this.socket.onerror = (event) => {
           console.error('[GeminiLive] WebSocket error:', event);
-          const errMsg = 'Koneksi ke Gemini 3.5 Transcribe Live terputus atau gagal.';
+          const errMsg = 'Koneksi ke Gemini 3.5 Transcribe Live gagal atau ditolak oleh server.';
           this.onError?.(errMsg);
-          if (this.isConnecting) {
-            this.isConnecting = false;
-            reject(new Error(errMsg));
-          }
+          safeReject(new Error(errMsg));
         };
 
         this.socket.onclose = (event) => {
           console.log(`[GeminiLive] WebSocket closed: ${event.reason} (code: ${event.code})`);
+          const wasReady = this.isSetupComplete;
           this.isSetupComplete = false;
           this.isConnecting = false;
-          this.onDisconnected?.(event.reason || `Code ${event.code}`);
+          const closeReason = event.reason || (event.code === 1007 ? 'API key tidak valid' : `Koneksi ditutup (kode ${event.code})`);
+          this.onDisconnected?.(closeReason);
+          if (!wasReady) {
+            this.onError?.(`Gagal terhubung ke Gemini Live: ${closeReason}`);
+            safeReject(new Error(closeReason));
+          }
         };
       } catch (err: any) {
         this.isConnecting = false;
         const msg = err?.message || 'Gagal menginisialisasi WebSocket Gemini Live.';
         this.onError?.(msg);
-        reject(err);
+        safeReject(err instanceof Error ? err : new Error(msg));
       }
     });
   }
@@ -153,15 +190,20 @@ export class GeminiLiveClient {
     return !!this.socket && this.socket.readyState === WebSocket.OPEN && this.isSetupComplete;
   }
 
+  public isConnectingActive(): boolean {
+    return this.isConnecting;
+  }
+
   private sendSetup(): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 
+    const formattedModel = this.model.startsWith('models/') ? this.model : `models/${this.model}`;
+
     const setupMessage = {
       setup: {
-        model: this.model,
+        model: formattedModel,
         generationConfig: {
           responseModalities: ['TEXT'],
-          temperature: 0.2,
         },
         systemInstruction: {
           parts: [
@@ -173,7 +215,11 @@ export class GeminiLiveClient {
       },
     };
 
-    this.socket.send(JSON.stringify(setupMessage));
+    try {
+      this.socket.send(JSON.stringify(setupMessage));
+    } catch (e) {
+      console.error('[GeminiLive] Error sending setup message:', e);
+    }
   }
 
   private handleServerMessage(message: any): void {

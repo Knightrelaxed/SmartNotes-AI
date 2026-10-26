@@ -414,6 +414,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
               onError: (errMsg) => {
                 console.error('[useAudioRecorder] Gemini Live error:', errMsg);
                 setIsLiveConnected(false);
+                setError(`Gemini Live: ${errMsg}`);
                 if (useRecordStore.getState().state === 'recording' && !recognitionRef.current && isSpeechSupported) {
                   console.log('[useAudioRecorder] Reverting to Web Speech API fallback...');
                   startSpeechRecognitionRef.current();
@@ -448,11 +449,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
           } catch (err: any) {
             console.error('[useAudioRecorder] Gagal menghubungkan Gemini Live:', err);
             setIsLiveConnected(false);
+            const userMsg = err?.message || 'Gagal menghubungkan Gemini Live';
+            setError(`Gemini Live: ${userMsg}. Menggunakan Web Speech API cadangan...`);
             if (isSpeechSupported) {
               console.log('[useAudioRecorder] Mengaktifkan Web Speech API sebagai fallback...');
               startSpeechRecognition();
             } else {
-              setError('Gagal menyambungkan Gemini Live dan Web Speech API tidak tersedia.');
+              setError(`Gemini Live: ${userMsg}. Web Speech API tidak didukung browser.`);
             }
           }
         }

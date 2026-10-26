@@ -13,6 +13,8 @@ import {
   FileText,
   ChevronRight,
   Trash2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useNotesStore } from '@/store/notesStore';
@@ -56,6 +58,31 @@ export function SettingsPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showClearNotesConfirm, setShowClearNotesConfirm] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [isTestingKey, setIsTestingKey] = useState(false);
+
+  const handleTestGeminiKey = async () => {
+    const keyToTest = ai.geminiApiKey?.trim();
+    if (!keyToTest) {
+      addToast({ type: 'warning', message: 'Masukkan API Key terlebih dahulu untuk diuji.' });
+      return;
+    }
+    setIsTestingKey(true);
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(keyToTest)}`);
+      const data = await res.json();
+      if (res.ok) {
+        addToast({ type: 'success', message: '✓ API Key valid! Berhasil terhubung ke Google AI Studio.' });
+      } else {
+        const errMsg = data?.error?.message || `Error status ${res.status}`;
+        addToast({ type: 'error', message: `✗ Validasi gagal: ${errMsg}` });
+      }
+    } catch (err: any) {
+      addToast({ type: 'error', message: `✗ Gagal menghubungi Google AI: ${err?.message || 'Network error'}` });
+    } finally {
+      setIsTestingKey(false);
+    }
+  };
 
   const handleClearAllNotes = () => {
     clearAllNotes();
@@ -343,15 +370,36 @@ ${note.content}
                   Dapatkan Key Google AI ↗
                 </a>
               </div>
-              <Input
-                type="password"
-                placeholder="AIzaSy... (Opsional jika sudah ada default)"
-                value={ai.geminiApiKey || ''}
-                onChange={(e) => updateAI({ geminiApiKey: e.target.value })}
-                className="bg-white dark:bg-gray-800"
-              />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showGeminiKey ? 'text' : 'password'}
+                    placeholder="AIzaSy... (Masukkan API Key Google AI Studio)"
+                    value={ai.geminiApiKey || ''}
+                    onChange={(e) => updateAI({ geminiApiKey: e.target.value })}
+                    className="bg-white dark:bg-gray-800 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    title={showGeminiKey ? "Sembunyikan API Key" : "Tampilkan API Key"}
+                  >
+                    {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleTestGeminiKey}
+                  disabled={isTestingKey || !ai.geminiApiKey?.trim()}
+                  className="whitespace-nowrap h-10 px-3 border-gray-300 dark:border-gray-700"
+                >
+                  {isTestingKey ? 'Menguji...' : 'Uji Koneksi'}
+                </Button>
+              </div>
               <p className="text-xs text-gray-400 mt-1">
-                Kunci Anda disimpan aman secara lokal di browser.
+                Kunci Anda disimpan aman secara lokal di browser dan otomatis aktif saat merekam.
               </p>
             </div>
 
