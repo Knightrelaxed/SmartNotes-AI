@@ -12,6 +12,7 @@ import {
   Monitor,
   FileText,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useNotesStore } from '@/store/notesStore';
@@ -48,12 +49,20 @@ export function SettingsPage() {
     resetSettings,
   } = useSettingsStore();
 
-  const { notes, subjects, addSubject, updateSubject, deleteSubject } = useNotesStore();
+  const { notes, subjects, addSubject, updateSubject, deleteSubject, clearAllNotes } = useNotesStore();
   const { addToast } = useUIStore();
   const { setTheme } = useTheme();
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showClearNotesConfirm, setShowClearNotesConfirm] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  const handleClearAllNotes = () => {
+    clearAllNotes();
+    localStorage.removeItem('smartnotes-storage');
+    setShowClearNotesConfirm(false);
+    addToast({ type: 'success', message: 'Semua catatan lokal berhasil dibersihkan!' });
+  };
 
   const handleAddSubject = (name: string, color: string) => {
     if (subjects.find((s) => s.name.toLowerCase() === name.toLowerCase())) {
@@ -456,6 +465,18 @@ ${note.content}
             <span className="text-xs text-gray-400">{notes.length} catatan</span>
           </Button>
 
+          <Button
+            variant="outline"
+            className="w-full justify-between text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/50 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+            onClick={() => setShowClearNotesConfirm(true)}
+          >
+            <span className="flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              Bersihkan Cache Catatan Lokal
+            </span>
+            <span className="text-xs">{notes.length} catatan</span>
+          </Button>
+
           <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
             <Button
               variant="outline"
@@ -468,6 +489,26 @@ ${note.content}
           </div>
         </div>
       </SettingsSection>
+
+      {/* Clear Notes Confirmation Dialog */}
+      <Dialog open={showClearNotesConfirm} onOpenChange={setShowClearNotesConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bersihkan Semua Catatan Lokal?</DialogTitle>
+            <DialogDescription>
+              Tindakan ini akan menghapus semua catatan lama/dummy yang tersimpan di browser ini. Data baru Anda di Cloud Firestore tidak akan terhapus.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowClearNotesConfirm(false)}>
+              Batal
+            </Button>
+            <Button variant="destructive" onClick={handleClearAllNotes}>
+              Hapus Semua Catatan Lokal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Reset Confirmation Dialog */}
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>

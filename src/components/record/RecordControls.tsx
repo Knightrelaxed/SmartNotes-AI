@@ -81,17 +81,26 @@ export function RecordControls({
                   <SelectValue placeholder="Pilih mata kuliah" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subjects.map((subject) => (
-                    <SelectItem key={subject.id} value={subject.name}>
+                  {subjects.length > 0 ? (
+                    subjects.map((subject) => (
+                      <SelectItem key={subject.id} value={subject.name}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full inline-block"
+                            style={{ backgroundColor: subject.color }}
+                          />
+                          {subject.name}
+                        </span>
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="Umum">
                       <span className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full inline-block"
-                          style={{ backgroundColor: subject.color }}
-                        />
-                        {subject.name}
+                        <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" />
+                        Umum
                       </span>
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>

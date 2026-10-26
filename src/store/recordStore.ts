@@ -47,7 +47,7 @@ export const useRecordStore = create<RecordState>((set, get) => ({
   state: 'idle',
   startTime: null,
   pausedTime: 0,
-  currentSubject: 'Kalkulus',
+  currentSubject: '',
   segments: [],
   currentText: '',
   audioLevel: 0,
