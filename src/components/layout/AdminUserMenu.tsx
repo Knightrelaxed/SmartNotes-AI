@@ -4,6 +4,7 @@ import { auth, signInWithGoogle, logOut, onUserAuthStateChanged } from '@/lib/fi
 import type { User as FirebaseUser } from 'firebase/auth';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useUIStore } from '@/store/uiStore';
 
 interface AdminUserMenuProps {
   className?: string;
@@ -17,6 +18,7 @@ const AdminUserMenu: React.FC<AdminUserMenuProps> = ({ className, collapsed = fa
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const { addToast } = useUIStore();
 
   // Monitor auth state
   useEffect(() => {
@@ -35,8 +37,30 @@ const AdminUserMenu: React.FC<AdminUserMenuProps> = ({ className, collapsed = fa
     try {
       await signInWithGoogle();
       setIsOpen(false);
-    } catch (error) {
+      addToast({ type: 'success', message: 'Berhasil login dengan akun Google!' });
+    } catch (error: any) {
       console.error('Google Sign In failed:', error);
+      if (error?.code === 'auth/unauthorized-domain') {
+        addToast({
+          type: 'error',
+          message: `Domain ${window.location.hostname} belum didaftarkan di Firebase Console (Authentication ➔ Settings ➔ Authorized Domains)!`,
+        });
+      } else if (error?.code === 'auth/popup-blocked') {
+        addToast({
+          type: 'error',
+          message: 'Popup login diblokir browser. Izinkan pop-up di address bar browser.',
+        });
+      } else if (error?.code === 'auth/popup-closed-by-user') {
+        addToast({
+          type: 'warning',
+          message: 'Jendela popup Google ditutup sebelum selesai login.',
+        });
+      } else {
+        addToast({
+          type: 'error',
+          message: error?.message || 'Gagal login dengan Google',
+        });
+      }
     }
   };
 
@@ -44,6 +68,7 @@ const AdminUserMenu: React.FC<AdminUserMenuProps> = ({ className, collapsed = fa
     try {
       await logOut();
       setIsOpen(false);
+      addToast({ type: 'info', message: 'Anda telah logout.' });
     } catch (error) {
       console.error('Sign Out failed:', error);
     }
