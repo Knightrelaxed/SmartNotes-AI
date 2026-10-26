@@ -24,8 +24,9 @@ export class OpenRouterClient {
     this.baseUrl = aiProvidersConfig.openrouter.baseUrl;
   }
 
-  async generateContent(prompt: string, modelType: 'primary' | 'fallback' = 'primary'): Promise<string> {
-    if (!this.apiKey) {
+  async generateContent(prompt: string, modelType: 'primary' | 'fallback' = 'primary', overrideKey?: string): Promise<string> {
+    const key = overrideKey || this.apiKey;
+    if (!key) {
       throw new Error('OpenRouter API key is not configured');
     }
 
@@ -40,7 +41,7 @@ export class OpenRouterClient {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          'Authorization': `Bearer ${key}`,
           'HTTP-Referer': window.location.origin,
           'X-Title': 'SmartNotes AI',
           'Content-Type': 'application/json'

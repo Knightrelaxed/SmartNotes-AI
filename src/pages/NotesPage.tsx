@@ -663,7 +663,7 @@ export function NotesPage() {
 
   const handleSaveSummary = async (id: string, newSummary: string) => {
     updateNote(id, { summary: newSummary });
-    if (isFirebaseReady) {
+    if (isFirebaseReady && userId) {
       try {
         await updateNoteInCloud(id, { summary: newSummary });
       } catch (err) {
@@ -679,7 +679,7 @@ export function NotesPage() {
 
   const handleDelete = async (id: string) => {
     deleteNote(id);
-    if (isFirebaseReady) {
+    if (isFirebaseReady && userId) {
       try {
         await deleteNoteFromCloud(id);
       } catch (err) {
@@ -774,17 +774,9 @@ export function NotesPage() {
                 note={note}
                 onView={(n) => { setViewNote(n); setDialogMode('view'); }}
                 onEdit={(n) => { 
-                  if (isFirebaseReady && !userId) {
-                    addToast({ type: 'error', message: 'Admin Only: Anda harus login untuk mengubah data' });
-                    return;
-                  }
                   setViewNote(n); setDialogMode('edit'); 
                 }}
                 onDelete={(id) => {
-                  if (isFirebaseReady && !userId) {
-                    addToast({ type: 'error', message: 'Admin Only: Anda harus login untuk mengubah data' });
-                    return;
-                  }
                   setDeleteConfirmId(id);
                 }}
               />

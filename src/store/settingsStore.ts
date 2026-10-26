@@ -17,6 +17,8 @@ const defaultSettings: AppSettings = {
   },
   ai: {
     engine: 'auto',
+    geminiApiKey: '',
+    openrouterApiKey: '',
     autoSummarize: true,
     autoExtractKeywords: true,
     autoCreateOutline: true,

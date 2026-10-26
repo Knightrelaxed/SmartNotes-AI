@@ -23,10 +23,10 @@ import {
 import { useSettingsStore } from '@/store/settingsStore';
 import { useNotesStore } from '@/store/notesStore';
 import { useUIStore } from '@/store/uiStore';
-import { useFirebase } from '@/hooks/useFirebase';
 import { useTheme } from '@/hooks/useTheme';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -152,18 +152,7 @@ export function SettingsPage() {
   const { notes } = useNotesStore();
   const { addToast } = useUIStore();
   const { setTheme } = useTheme();
-  const { isConfigured: isFirebaseReady, userId } = useFirebase();
 
-  const requireAdmin = <T extends any[], R>(fn: (...args: T) => R) => {
-    return (...args: T): R | void => {
-      if (isFirebaseReady && !userId) {
-        addToast({ type: 'error', message: 'Admin Only: Anda harus login untuk mengubah pengaturan' });
-        return;
-      }
-      return fn(...args);
-    };
-  };
-  
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showAddSubject, setShowAddSubject] = useState(false);
@@ -181,7 +170,7 @@ export function SettingsPage() {
     '#00BCD4', '#FF5722', '#3F51B5', '#E91E63', '#009688'
   ];
 
-  const handleAddSubject = requireAdmin(() => {
+  const handleAddSubject = () => {
     const trimmed = newSubjectName.trim();
     if (!trimmed) return;
     if (subjects.find(s => s.name.toLowerCase() === trimmed.toLowerCase())) {
@@ -193,20 +182,20 @@ export function SettingsPage() {
     setNewSubjectColor('#6C63FF');
     setShowAddSubject(false);
     addToast({ type: 'success', message: `Mata kuliah "${trimmed}" ditambahkan!` });
-  });
+  };
 
-  const handleSaveEdit = requireAdmin((id: string) => {
+  const handleSaveEdit = (id: string) => {
     const trimmed = editingName.trim();
     if (!trimmed) return;
     updateSubject(id, { name: trimmed, color: editingColor });
     setEditingSubjectId(null);
     addToast({ type: 'success', message: 'Mata kuliah diperbarui!' });
-  });
+  };
 
-  const handleDeleteSubject = requireAdmin((id: string, name: string) => {
+  const handleDeleteSubject = (id: string, name: string) => {
     deleteSubject(id);
     addToast({ type: 'info', message: `Mata kuliah "${name}" dihapus` });
-  });
+  };
 
   const handleExportData = () => {
     const data = {
@@ -272,11 +261,11 @@ ${note.content}
     addToast({ type: 'success', message: 'Semua catatan diekspor ke TXT' });
   };
 
-  const handleReset = requireAdmin(() => {
+  const handleReset = () => {
     resetSettings();
     setShowResetConfirm(false);
     addToast({ type: 'success', message: 'Pengaturan direset ke default' });
-  });
+  };
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -301,7 +290,7 @@ ${note.content}
         >
           <Switch 
             checked={audio.noiseReduction} 
-            onCheckedChange={requireAdmin((v) => updateAudio({ noiseReduction: v }))}
+            onCheckedChange={(v) => updateAudio({ noiseReduction: v })}
           />
         </SettingItem>
         
@@ -311,14 +300,14 @@ ${note.content}
         >
           <Switch 
             checked={audio.autoGainControl} 
-            onCheckedChange={requireAdmin((v) => updateAudio({ autoGainControl: v }))}
+            onCheckedChange={(v) => updateAudio({ autoGainControl: v })}
           />
         </SettingItem>
         
         <SettingItem label="Kualitas Audio">
           <Select 
             value={audio.quality} 
-            onValueChange={requireAdmin((v: string) => updateAudio({ quality: v as typeof audio.quality }))}
+            onValueChange={(v: string) => updateAudio({ quality: v as typeof audio.quality })}
           >
             <SelectTrigger className="w-[150px]">
               <SelectValue />
@@ -345,7 +334,7 @@ ${note.content}
         >
           <Select 
             value={transcription.language} 
-            onValueChange={requireAdmin((v: string) => updateTranscription({ language: v }))}
+            onValueChange={(v: string) => updateTranscription({ language: v })}
           >
             <SelectTrigger className="w-[160px]">
               <SelectValue />
@@ -363,7 +352,7 @@ ${note.content}
         >
           <Select 
             value={interfaceSettings.autoSaveInterval.toString()} 
-            onValueChange={requireAdmin((v: string) => updateInterface({ autoSaveInterval: parseInt(v) }))}
+            onValueChange={(v: string) => updateInterface({ autoSaveInterval: parseInt(v) })}
           >
             <SelectTrigger className="w-[130px]">
               <SelectValue />
@@ -392,19 +381,19 @@ ${note.content}
             label="Auto (Gemini + Fallback OpenRouter)"
             description="Smart routing dengan 3 lapisan proteksi kuota (Rekomendasi)"
             selected={ai.engine === 'auto'}
-            onClick={requireAdmin(() => updateAI({ engine: 'auto' }))}
+            onClick={() => updateAI({ engine: 'auto' })}
           />
           <RadioOption
             label="Gemini Only"
             description="Menggunakan 2 API key Google Gemini. Cepat dan presisi."
             selected={ai.engine === 'gemini'}
-            onClick={requireAdmin(() => updateAI({ engine: 'gemini' }))}
+            onClick={() => updateAI({ engine: 'gemini' })}
           />
           <RadioOption
             label="OpenRouter Only"
             description="Hanya menggunakan model gratis Llama/Qwen via OpenRouter"
             selected={ai.engine === 'openrouter'}
-            onClick={requireAdmin(() => updateAI({ engine: 'openrouter' }))}
+            onClick={() => updateAI({ engine: 'openrouter' })}
           />
         </div>
         
@@ -415,27 +404,81 @@ ${note.content}
             <SettingItem label="Generate ringkasan">
               <Switch 
                 checked={ai.autoSummarize} 
-                onCheckedChange={requireAdmin((v) => updateAI({ autoSummarize: v }))}
+                onCheckedChange={(v) => updateAI({ autoSummarize: v })}
               />
             </SettingItem>
             <SettingItem label="Extract kata kunci">
               <Switch 
                 checked={ai.autoExtractKeywords} 
-                onCheckedChange={requireAdmin((v) => updateAI({ autoExtractKeywords: v }))}
+                onCheckedChange={(v) => updateAI({ autoExtractKeywords: v })}
               />
             </SettingItem>
             <SettingItem label="Buat outline">
               <Switch 
                 checked={ai.autoCreateOutline} 
-                onCheckedChange={requireAdmin((v) => updateAI({ autoCreateOutline: v }))}
+                onCheckedChange={(v) => updateAI({ autoCreateOutline: v })}
               />
             </SettingItem>
             <SettingItem label="Generate flashcards">
               <Switch 
                 checked={ai.generateFlashcards} 
-                onCheckedChange={requireAdmin((v) => updateAI({ generateFlashcards: v }))}
+                onCheckedChange={(v) => updateAI({ generateFlashcards: v })}
               />
             </SettingItem>
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-4">
+          <p className="font-medium text-gray-900 dark:text-white">API Keys Kustom</p>
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Google Gemini API Key
+                </label>
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-xs text-[#6C63FF] hover:underline"
+                >
+                  Dapatkan Key Google AI ↗
+                </a>
+              </div>
+              <Input
+                type="password"
+                placeholder="AIzaSy... (Opsional jika sudah ada default)"
+                value={ai.geminiApiKey || ''}
+                onChange={(e) => updateAI({ geminiApiKey: e.target.value })}
+                className="bg-white dark:bg-gray-800"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Disimpan aman di localStorage browser Anda.
+              </p>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  OpenRouter API Key (Fallback / Alternatif)
+                </label>
+                <a 
+                  href="https://openrouter.ai/keys" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-xs text-[#6C63FF] hover:underline"
+                >
+                  Dapatkan Key OpenRouter ↗
+                </a>
+              </div>
+              <Input
+                type="password"
+                placeholder="sk-or-v1-... (Opsional)"
+                value={ai.openrouterApiKey || ''}
+                onChange={(e) => updateAI({ openrouterApiKey: e.target.value })}
+                className="bg-white dark:bg-gray-800"
+              />
+            </div>
           </div>
         </div>
       </SettingsSection>

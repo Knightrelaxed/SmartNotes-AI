@@ -215,10 +215,6 @@ export function RecordPage() {
   }, [error, addToast]);
 
   const handleStart = async () => {
-    if (isFirebaseReady && !userId) {
-      addToast({ type: 'error', message: 'Admin Only: Anda harus login untuk merekam' });
-      return;
-    }
     await startRecording();
   };
 
@@ -290,16 +286,16 @@ export function RecordPage() {
         : [],
     };
 
-    // SAVE LOGIC: Jika Firebase aktif, biarkan Firebase yang trigger listener ke Zustand.
-    // Jika Firebase mati (offline mode), baru fallback simpan ke Zustand manual.
-    if (isFirebaseReady) {
+    // Selalu simpan ke local Zustand store agar data aman tersimpan
+    addNote(baseData);
+
+    // Jika Firebase siap dan user terautentikasi, sinkronisasikan juga ke cloud
+    if (isFirebaseReady && userId) {
       try {
         await saveNoteToCloud(baseData);
       } catch (err) {
         console.error('Failed to save to cloud:', err);
       }
-    } else {
-      addNote(baseData);
     }
 
     setShowSaveDialog(false);

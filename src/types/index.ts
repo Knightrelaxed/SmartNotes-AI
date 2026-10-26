@@ -40,6 +40,8 @@ export interface TranscriptionSettings {
 
 export interface AISettings {
   engine: 'gemini' | 'openrouter' | 'auto';
+  geminiApiKey?: string;
+  openrouterApiKey?: string;
   autoSummarize: boolean;
   autoExtractKeywords: boolean;
   autoCreateOutline: boolean;

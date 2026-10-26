@@ -18,12 +18,18 @@ export class AIManager {
     this.initProviders();
   }
 
-  private initProviders() {
+  initProviders() {
+    this.providers.clear();
+    const userSettings = useSettingsStore.getState().ai;
+    const primaryGeminiKey = userSettings.geminiApiKey?.trim() || aiProvidersConfig.gemini[0]?.key || geminiConfig.apiKey;
+    const secondaryGeminiKey = aiProvidersConfig.gemini[1]?.key;
+    const openrouterKey = userSettings.openrouterApiKey?.trim() || aiProvidersConfig.openrouter?.key;
+
     // 1. Primary Gemini
-    if (aiProvidersConfig.gemini[0]?.key) {
-      const genAI = new GoogleGenerativeAI(aiProvidersConfig.gemini[0].key);
+    if (primaryGeminiKey) {
+      const genAI = new GoogleGenerativeAI(primaryGeminiKey);
       const model = genAI.getGenerativeModel({
-        model: geminiConfig.model,
+        model: geminiConfig.model || 'gemini-2.0-flash',
         generationConfig: geminiConfig.generationConfig,
       });
       this.providers.set('gemini_primary', {
@@ -39,10 +45,10 @@ export class AIManager {
     }
 
     // 2. Secondary Gemini
-    if (aiProvidersConfig.gemini[1]?.key) {
-      const genAI = new GoogleGenerativeAI(aiProvidersConfig.gemini[1].key);
+    if (secondaryGeminiKey) {
+      const genAI = new GoogleGenerativeAI(secondaryGeminiKey);
       const model = genAI.getGenerativeModel({
-        model: geminiConfig.model,
+        model: geminiConfig.model || 'gemini-2.0-flash',
         generationConfig: geminiConfig.generationConfig,
       });
       this.providers.set('gemini_secondary', {
@@ -58,15 +64,15 @@ export class AIManager {
     }
 
     // 3. OpenRouter Primary & Fallback
-    if (aiProvidersConfig.openrouter?.key) {
+    if (openrouterKey) {
       this.providers.set('openrouter_primary', {
         id: 'openrouter_primary',
-        generateContent: async (prompt) => openRouterClient.generateContent(prompt, 'primary'),
+        generateContent: async (prompt) => openRouterClient.generateContent(prompt, 'primary', openrouterKey),
       });
 
       this.providers.set('openrouter_fallback', {
         id: 'openrouter_fallback',
-        generateContent: async (prompt) => openRouterClient.generateContent(prompt, 'fallback'),
+        generateContent: async (prompt) => openRouterClient.generateContent(prompt, 'fallback', openrouterKey),
       });
     }
   }
@@ -115,6 +121,7 @@ export class AIManager {
   }
 
   async generateContent(prompt: string, forceProvider?: AIProviderId): Promise<string> {
+    this.initProviders();
     const order = forceProvider ? [forceProvider] : this.getProviderOrder();
     
     if (order.length === 0) {

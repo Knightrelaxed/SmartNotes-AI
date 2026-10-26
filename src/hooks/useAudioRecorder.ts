@@ -75,6 +75,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const animationFrameRef = useRef<number | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const lastTranscriptRef = useRef<string>('');
+  const isManuallyStoppedRef = useRef<boolean>(false);
+  const monitorAudioLevelRef = useRef<() => void>(() => {});
+  const startSpeechRecognitionRef = useRef<() => void>(() => {});
   
   const { setAudioLevel, addSegment, updateCurrentText } = useRecordStore();
 
@@ -118,13 +121,28 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     
     setAudioLevel(normalizedLevel);
     
-    animationFrameRef.current = requestAnimationFrame(monitorAudioLevel);
+    animationFrameRef.current = requestAnimationFrame(() => {
+      monitorAudioLevelRef.current();
+    });
   }, [setAudioLevel]);
+
+  useEffect(() => {
+    monitorAudioLevelRef.current = monitorAudioLevel;
+  }, [monitorAudioLevel]);
 
   // Real Speech Recognition function
   const startSpeechRecognition = useCallback(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {
+        // Ignore
+      }
+      recognitionRef.current = null;
+    }
     
     const recognition = new SpeechRecognition();
     
@@ -139,9 +157,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     // Reset transcript tracking
     lastTranscriptRef.current = '';
     
-    // Handle recognition results - FIX: Handle both interim and final results
+    // Handle recognition results
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      // Pengecekan krusial: Jika tidak sedang merekam, ignore/buang input teksnya
       if (useRecordStore.getState().state !== 'recording') return;
 
       let finalTranscript = '';
@@ -150,7 +167,6 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          // Pick highest-confidence alternative for better accuracy
           let bestTranscript = '';
           let bestConfidence = 0;
           for (let j = 0; j < result.length; j++) {
@@ -172,84 +188,56 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       
       // Add final transcripts to the store
       if (finalTranscript.trim()) {
-        console.log('Speech recognized (final):', finalTranscript);
         addSegment(finalTranscript.trim(), true);
         lastTranscriptRef.current = finalTranscript;
-        // Clear interim text after final result
         updateCurrentText('');
       }
     };
-
     
-    // Handle errors with auto-restart mechanism (BUG FIX #5, #12)
+    // Handle errors cleanly without duplicate restart calls
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
+      console.warn('Speech recognition warning:', event.error);
       
       switch (event.error) {
         case 'no-speech':
-          // Auto-restart quickly so recognition doesn't lag
           useRecordStore.getState().finalizeSegment();
-          setTimeout(() => {
-            if (useRecordStore.getState().state === 'recording' && recognitionRef.current) {
-              try {
-                recognitionRef.current.lang = getRecognitionLang();
-                recognitionRef.current.start();
-              } catch {
-                // Ignore restart errors
-              }
-            }
-          }, 200);
           break;
         case 'audio-capture':
           setError('Mikrofon tidak ditemukan');
           break;
         case 'not-allowed':
+          isManuallyStoppedRef.current = true;
           setError('Izin mikrofon ditolak');
           break;
         case 'network':
-          setError('Error jaringan. Mencoba ulang...');
-          // Auto-restart on network error after delay without losing text
+          setError('Koneksi speech terputus. Mencoba reconnect...');
           useRecordStore.getState().finalizeSegment();
-          setTimeout(() => {
-            if (useRecordStore.getState().state === 'recording' && recognitionRef.current) {
-              try {
-                recognitionRef.current.lang = getRecognitionLang();
-                recognitionRef.current.start();
-              } catch {
-                // Ignore restart errors
-              }
-            }
-          }, 2000);
           break;
         case 'aborted':
-          // Don't show error for user-initiated abort
           break;
         default:
-          setError(`Speech recognition error: ${event.error}`);
+          console.warn(`Speech recognition status: ${event.error}`);
       }
     };
     
-    // Handle end - restart recognition if still recording
+    // Handle end - restart recognition cleanly if still recording
     recognition.onend = () => {
       const store = useRecordStore.getState();
       
-      // Finalize any stuck interim text before restarting so we don't lose words
       if (store.state === 'recording') {
         store.finalizeSegment();
       }
       
-      if (store.state === 'recording' && recognitionRef.current) {
-        // Add small delay before restart to prevent rapid restart loops
+      if (!isManuallyStoppedRef.current && store.state === 'recording') {
         setTimeout(() => {
-          if (useRecordStore.getState().state === 'recording' && recognitionRef.current) {
+          if (!isManuallyStoppedRef.current && useRecordStore.getState().state === 'recording') {
             try {
-              recognitionRef.current.lang = getRecognitionLang();
-              recognitionRef.current.start();
-            } catch (e) {
-              // Ignore restart errors
+              startSpeechRecognitionRef.current();
+            } catch (err) {
+              console.warn('Speech recognition restart failed:', err);
             }
           }
-        }, 100);
+        }, 150);
       }
     };
     
@@ -262,6 +250,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       console.error('Error starting speech recognition:', err);
     }
   }, [addSegment, updateCurrentText]);
+
+  useEffect(() => {
+    startSpeechRecognitionRef.current = startSpeechRecognition;
+  }, [startSpeechRecognition]);
 
 
 
@@ -336,25 +328,38 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       analyserRef.current.smoothingTimeConstant = 0.85; // Smoother audio visualizer
       source.connect(analyserRef.current);
 
-      // Set up media recorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm') 
-          ? 'audio/webm' 
-          : 'audio/mp4',
-      });
+      // Set up media recorder with supported mimeType
+      let mimeType = '';
+      const candidateTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+        'audio/aac'
+      ];
+      for (const candidate of candidateTypes) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidate)) {
+          mimeType = candidate;
+          break;
+        }
+      }
+
+      const mediaRecorder = mimeType 
+        ? new MediaRecorder(stream, { mimeType }) 
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
       const chunks: Blob[] = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           chunks.push(event.data);
         }
       };
 
       // Store audio blob for potential use
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const audioBlob = new Blob(chunks, { type: mimeType || 'audio/webm' });
         console.log('Recording stopped, blob size:', audioBlob.size);
         (mediaRecorderRef.current as any).audioBlob = audioBlob;
       };
@@ -365,6 +370,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       monitorAudioLevel();
       
       // Update store state - reset first to ensure clean state
+      isManuallyStoppedRef.current = false;
       useRecordStore.getState().resetRecording();
       useRecordStore.getState().startRecording();
       
@@ -385,6 +391,8 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   }, [isSupported, isSpeechSupported, monitorAudioLevel, startSpeechRecognition]);
 
   const stopRecording = useCallback(() => {
+    isManuallyStoppedRef.current = true;
+
     // Stop media recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
@@ -434,8 +442,17 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   }, [setAudioLevel]);
 
   const pauseRecording = useCallback(() => {
+    isManuallyStoppedRef.current = true;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Ignore
+      }
+      recognitionRef.current = null;
     }
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -444,12 +461,16 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   }, []);
 
   const resumeRecording = useCallback(() => {
+    isManuallyStoppedRef.current = false;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
     }
     monitorAudioLevel();
     useRecordStore.getState().resumeRecording();
-  }, [monitorAudioLevel]);
+    if (isSpeechSupported) {
+      startSpeechRecognition();
+    }
+  }, [monitorAudioLevel, isSpeechSupported, startSpeechRecognition]);
 
   // BUG FIX #12: Cleanup on unmount - stop recording if active
   useEffect(() => {

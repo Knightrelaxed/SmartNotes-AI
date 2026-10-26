@@ -117,8 +117,13 @@ export function useFirebase(): UseFirebaseReturn {
         updatedAt: new Date(note.updatedAt)
       }));
       
-      // Sinkronisasikan secara hardcode ke Zustand
-      useNotesStore.getState().setNotes(appNotes);
+      // Merge dengan catatan lokal agar catatan tidak terhapus jika Firebase kosong
+      if (appNotes.length > 0) {
+        const currentNotes = useNotesStore.getState().notes;
+        const cloudIds = new Set(appNotes.map(n => n.id));
+        const localOnlyNotes = currentNotes.filter(n => !cloudIds.has(n.id));
+        useNotesStore.getState().setNotes([...appNotes, ...localOnlyNotes]);
+      }
     });
 
     setNotesUnsubscribe(() => unsubscribe);

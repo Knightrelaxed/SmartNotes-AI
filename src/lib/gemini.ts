@@ -1,10 +1,20 @@
 import { aiManager } from './ai-manager';
-import { aiProvidersConfig } from '@/config/app.config';
+import { aiProvidersConfig, geminiConfig } from '@/config/app.config';
 import { extractSafeJSON } from './json-sanitizer';
+import { useSettingsStore } from '@/store/settingsStore';
 
-// Check if Gemini is configured (legacy check, still used for UI toggles)
+// Check if any AI provider is configured (settings key, env config, or app config)
 const isGeminiConfigured = () => {
-  return !!((aiProvidersConfig.gemini && aiProvidersConfig.gemini.length > 0) || aiProvidersConfig.openrouter?.key);
+  const aiSettings = useSettingsStore.getState().ai;
+  const userGemini = aiSettings.geminiApiKey?.trim();
+  const userOpenRouter = aiSettings.openrouterApiKey?.trim();
+  return !!(
+    userGemini ||
+    userOpenRouter ||
+    geminiConfig.apiKey ||
+    (aiProvidersConfig.gemini && aiProvidersConfig.gemini.some(g => g.key)) ||
+    aiProvidersConfig.openrouter?.key
+  );
 };
 
 
