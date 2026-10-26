@@ -11,6 +11,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
   type Firestore,
 } from 'firebase/firestore';
 import {
@@ -221,7 +222,10 @@ export const getNoteById = async (
   }
 };
 
-export const subscribeToNotes = (callback: (notes: FirebaseNote[]) => void) => {
+export const subscribeToNotes = (
+  callback: (notes: FirebaseNote[]) => void,
+  userId?: string | null
+) => {
   if (!db) {
     console.warn('Firestore not initialized');
     callback([]);
@@ -229,7 +233,9 @@ export const subscribeToNotes = (callback: (notes: FirebaseNote[]) => void) => {
   }
 
   const notesRef = collection(db, 'notes');
-  const q = query(notesRef, orderBy('createdAt', 'desc'));
+  const q = userId
+    ? query(notesRef, where('userId', '==', userId))
+    : query(notesRef, orderBy('createdAt', 'desc'));
 
   return onSnapshot(
     q,
@@ -243,6 +249,8 @@ export const subscribeToNotes = (callback: (notes: FirebaseNote[]) => void) => {
           updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
         } as FirebaseNote;
       });
+      // Sort client-side to prevent requiring complex composite indexes
+      notesArray.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       callback(notesArray);
     },
     (error) => {

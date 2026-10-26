@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  signInUser,
   onUserAuthStateChanged,
   subscribeToNotes,
   saveNote,
@@ -21,6 +20,8 @@ interface UseFirebaseReturn {
   isInitialized: boolean;
   isConfigured: boolean;
   userId: string | null;
+  userEmail: string | null;
+  isAdmin: boolean;
   isLoading: boolean;
   error: string | null;
   
@@ -41,6 +42,8 @@ interface UseFirebaseReturn {
 export function useFirebase(): UseFirebaseReturn {
   const [isInitialized, setIsInitialized] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<FirebaseNote[]>([]);
@@ -76,18 +79,15 @@ export function useFirebase(): UseFirebaseReturn {
     };
 
     // Listen for auth state changes
-    unsubscribeAuth = onUserAuthStateChanged(async (user) => {
+    unsubscribeAuth = onUserAuthStateChanged((user) => {
       if (user) {
         setUserId(user.uid);
+        setUserEmail(user.email || null);
+        setIsAdmin(true);
       } else {
-        try {
-          const anonUser = await signInUser();
-          if (anonUser) {
-            setUserId(anonUser.uid);
-          }
-        } catch {
-          setUserId(null);
-        }
+        setUserId(null);
+        setUserEmail(null);
+        setIsAdmin(false);
       }
       setIsInitialized(true);
       setIsLoading(false);
@@ -102,18 +102,17 @@ export function useFirebase(): UseFirebaseReturn {
     };
   }, [isConfigured, addToast]);
 
-  // Subscribe to GLOBAL notes unconditionally (Public Read)
+  // Subscribe to Cloud Firestore notes (only when user is authenticated with Google)
   useEffect(() => {
-    if (!isConfigured) {
+    if (!isConfigured || !userId) {
+      if (notesUnsubscribeRef.current) {
+        notesUnsubscribeRef.current();
+        notesUnsubscribeRef.current = null;
+      }
       return;
     }
 
-    // Unsubscribe from previous subscription
-    if (notesUnsubscribeRef.current) {
-      notesUnsubscribeRef.current();
-    }
-
-    // Subscribe to notes
+    // Subscribe to notes belonging to this user
     const unsubscribe = subscribeToNotes((newNotes) => {
       setNotes(newNotes);
       
@@ -125,14 +124,10 @@ export function useFirebase(): UseFirebaseReturn {
         updatedAt: new Date(note.updatedAt)
       }));
       
-      // Merge dengan catatan lokal agar catatan tidak terhapus jika Firebase kosong
       if (appNotes.length > 0) {
-        const currentNotes = useNotesStore.getState().notes;
-        const cloudIds = new Set(appNotes.map(n => n.id));
-        const localOnlyNotes = currentNotes.filter(n => !cloudIds.has(n.id));
-        useNotesStore.getState().setNotes([...appNotes, ...localOnlyNotes]);
+        useNotesStore.getState().setNotes(appNotes);
       }
-    });
+    }, userId);
 
     notesUnsubscribeRef.current = unsubscribe;
 
@@ -140,19 +135,18 @@ export function useFirebase(): UseFirebaseReturn {
       unsubscribe();
       notesUnsubscribeRef.current = null;
     };
-  }, [isConfigured]);
+  }, [isConfigured, userId]);
 
   // Save note to cloud
   const saveNoteToCloud = useCallback(async (
     note: Omit<FirebaseNote, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<string | null> => {
-    if (!isConfigured) {
-      console.warn('Cannot save note: Firebase not configured');
+    if (!isConfigured || !isAdmin || !userId) {
+      console.warn('Cannot save note: user is not authenticated as admin');
       return null;
     }
-    const currentUserId = userId || 'anonymous';
     try {
-      const noteId = await saveNote(currentUserId, note);
+      const noteId = await saveNote(userId, note);
       if (noteId) {
         addToast({ type: 'success', message: 'Catatan tersimpan ke Cloud Firestore' });
       }
@@ -162,44 +156,44 @@ export function useFirebase(): UseFirebaseReturn {
       addToast({ type: 'error', message: 'Gagal menyimpan ke Cloud Firestore' });
       throw err;
     }
-  }, [userId, isConfigured, addToast]);
+  }, [userId, isAdmin, isConfigured, addToast]);
 
   // Update note in cloud
   const updateNoteInCloud = useCallback(async (
     noteId: string,
     updates: Partial<FirebaseNote>
   ): Promise<void> => {
-    if (!isConfigured) {
-      console.warn('Cannot update note: Firebase not configured');
+    if (!isConfigured || !isAdmin || !userId) {
+      console.warn('Cannot update note: user is not authenticated as admin');
       return;
     }
 
     try {
-      await updateNote(userId || 'anonymous', noteId, updates);
+      await updateNote(userId, noteId, updates);
       addToast({ type: 'success', message: 'Catatan diperbarui di Cloud' });
     } catch (err) {
       console.error('Error updating note:', err);
       addToast({ type: 'error', message: 'Gagal memperbarui catatan di Cloud' });
       throw err;
     }
-  }, [userId, isConfigured, addToast]);
+  }, [userId, isAdmin, isConfigured, addToast]);
 
   // Delete note from cloud
   const deleteNoteFromCloud = useCallback(async (noteId: string): Promise<void> => {
-    if (!isConfigured) {
-      console.warn('Cannot delete note: Firebase not configured');
+    if (!isConfigured || !isAdmin || !userId) {
+      console.warn('Cannot delete note: user is not authenticated as admin');
       return;
     }
 
     try {
-      await deleteNote(userId || 'anonymous', noteId);
+      await deleteNote(userId, noteId);
       addToast({ type: 'success', message: 'Catatan dihapus dari Cloud' });
     } catch (err) {
       console.error('Error deleting note:', err);
-      addToast({ type: 'error', message: 'Gagal menghapus catatan dari Cloud' });
+      addToast({ type: 'error', message: 'Gagal menghapus catatan di Cloud' });
       throw err;
     }
-  }, [userId, isConfigured, addToast]);
+  }, [userId, isAdmin, isConfigured, addToast]);
 
   // Refresh notes (manual trigger)
   const refreshNotes = useCallback(() => {
@@ -221,10 +215,10 @@ export function useFirebase(): UseFirebaseReturn {
         updatedAt: new Date(note.updatedAt)
       }));
       useNotesStore.getState().setNotes(appNotes);
-    });
+    }, userId);
 
     notesUnsubscribeRef.current = unsubscribe;
-  }, [isConfigured]);
+  }, [isConfigured, userId]);
 
   // Create transcription session
   const createSession = useCallback(async (subject: string): Promise<string | null> => {
@@ -289,6 +283,8 @@ export function useFirebase(): UseFirebaseReturn {
     isInitialized,
     isConfigured,
     userId,
+    userEmail,
+    isAdmin,
     isLoading,
     error,
     notes,

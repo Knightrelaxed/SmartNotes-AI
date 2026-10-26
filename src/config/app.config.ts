@@ -53,6 +53,12 @@ export const appConfig = {
   autoSaveInterval: 30000,    // 30 seconds
 };
 
+// Admin Config
+export const adminConfig = {
+  // Opsional: jika ingin membatasi ke email tertentu via Environment Variable (.env)
+  adminEmail: import.meta.env.VITE_ADMIN_EMAIL || '',
+};
+
 // Export all configs
 export default {
   firebase: firebaseConfig,
