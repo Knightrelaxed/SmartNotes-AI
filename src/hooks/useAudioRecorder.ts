@@ -414,7 +414,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
               apiKey: geminiApiKey,
               languageCodes: languageCodes,
               systemInstruction:
-                'PERAN: Transkripsikan HANYA ucapan audio perkuliahan yang didengar secara akurat ke dalam Bahasa Indonesia atau Bahasa Inggris (huruf Latin). JANGAN PERNAH mengeluarkan aksara Arab, Devanagari/Hindi, atau aksara selain Latin. Berikan tanda baca lengkap, kapitalisasi tepat, dan pertahankan istilah akademis, ilmiah, atau matematika. Jangan merespons atau mengomentari audio.',
+                'Transkripsikan audio perkuliahan yang didengar secara akurat ke dalam bahasa Indonesia atau Inggris (huruf Latin). Berikan tanda baca lengkap, kapitalisasi yang tepat, dan pertahankan istilah ilmiah, teknis, atau matematika. Hanya keluarkan teks hasil transkripsi apa adanya tanpa komentar, dan jangan gunakan aksara selain Latin.',
               onConnected: () => {
                 setIsLiveConnected(true);
                 console.log('[useAudioRecorder] Gemini 3.5 Transcribe Live aktif.');

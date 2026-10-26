@@ -36,14 +36,7 @@ export class GeminiLiveClient {
     this.languageCodes = options.languageCodes || ['id-ID', 'id', 'en-US', 'en'];
     this.systemInstruction =
       options.systemInstruction ||
-      `PERAN & TUGAS UTAMA:
-Kamu adalah mesin Speech-to-Text (Transkriptor Audio Langsung) khusus perkuliahan dan percakapan.
-1. Transkripsikan HANYA apa yang diucapkan pembicara secara persis apa adanya dalam Bahasa Indonesia atau Bahasa Inggris.
-2. Gunakan HANYA karakter alfabet Latin (A-Z, a-z), angka, dan tanda baca standar.
-3. JANGAN PERNAH mengeluarkan huruf/aksara non-Latin (seperti aksara Arab, Hindi/Devanagari, Sirilik, Mandarin, Thai, dll).
-4. JANGAN PERNAH merespons percakapan, jangan menjawab pertanyaan, jangan menambahkan kata sapaan, jangan membuat komentar AI sendiri.
-5. Jika pembicara hening, atau hanya terdengar desis mikrofon / derau ruangan, JANGAN mengeluarkan teks sama sekali.
-6. Pertahankan istilah teknis, medis, ilmiah, dan singkatan akademis secara akurat.`;
+      'Transkripsikan audio perkuliahan yang didengar secara akurat ke dalam bahasa Indonesia atau Inggris (huruf Latin). Berikan tanda baca lengkap, kapitalisasi yang tepat, dan pertahankan istilah ilmiah, teknis, atau matematika. Hanya keluarkan teks hasil transkripsi apa adanya tanpa komentar, dan jangan gunakan aksara selain Latin.';
     this.onConnected = options.onConnected;
     this.onDisconnected = options.onDisconnected;
     this.onError = options.onError;
