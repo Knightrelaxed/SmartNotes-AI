@@ -91,6 +91,29 @@ export function SettingsPage() {
     addToast({ type: 'success', message: 'Semua catatan lokal berhasil dibersihkan!' });
   };
 
+  const handleClearCacheAndReload = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const cacheKeys = await caches.keys();
+        for (const key of cacheKeys) {
+          await caches.delete(key);
+        }
+      }
+      addToast({ type: 'success', message: 'Cache dibersihkan! Memuat ulang versi terbaru...' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch {
+      window.location.reload();
+    }
+  };
+
   const handleAddSubject = (name: string, color: string) => {
     if (subjects.find((s) => s.name.toLowerCase() === name.toLowerCase())) {
       addToast({ type: 'warning', message: 'Mata kuliah sudah ada!' });
@@ -541,6 +564,18 @@ ${note.content}
               Bersihkan Cache Catatan Lokal
             </span>
             <span className="text-xs">{notes.length} catatan</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            className="w-full justify-between text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/50 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+            onClick={handleClearCacheAndReload}
+          >
+            <span className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Bersihkan Cache PWA & Muat Ulang Versi Terbaru
+            </span>
+            <span className="text-xs">Update Paksa</span>
           </Button>
 
           <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
