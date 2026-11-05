@@ -32,7 +32,7 @@ export class GeminiLiveClient {
 
   constructor(options: GeminiLiveOptions) {
     this.apiKey = options.apiKey;
-    this.model = options.model || 'models/gemini-3.5-transcribe-live';
+    this.model = options.model || 'models/gemini-3.5-transcribe';
     this.systemInstruction =
       options.systemInstruction ||
       `Kamu adalah mesin Speech-to-Text (Transkriptor Audio Langsung) khusus perkuliahan dan percakapan.

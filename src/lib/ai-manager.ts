@@ -25,13 +25,40 @@ export class AIManager {
     const secondaryGeminiKey = aiProvidersConfig.gemini[1]?.key;
     const openrouterKey = userSettings.openrouterApiKey?.trim() || aiProvidersConfig.openrouter?.key;
 
+    // Candidate models ordered by quota tier based on Google AI Studio limits:
+    // 1. Tier 1 (500 RPD, 15 RPM, 250k TPM): gemini-3.5-flash-lite & gemini-3.1-flash-lite
+    // 2. Tier 2 (Lite models): gemini-2.5-flash-lite
+    // 3. Tier 3 (Full flash models - 20 RPD, 5 RPM): gemini-3.6-flash, gemini-3.8-flash, gemini-3-flash, gemini-2.5-flash
+    // 4. Tier 4 (Standard legacy fallbacks): gemini-2.0-flash, gemini-1.5-flash
     const candidateModels = [
       geminiConfig.model || 'gemini-3.5-flash-lite',
-      'gemini-2.5-flash',
+      'gemini-3.1-flash-lite',
       'gemini-2.5-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.8-flash',
+      'gemini-3-flash',
+      'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
     ];
+
+    const isModelRetryable = (err: any): boolean => {
+      if (!err) return false;
+      const msg = (err?.message || String(err)).toLowerCase();
+      return (
+        msg.includes('404') ||
+        msg.includes('not found') ||
+        msg.includes('no longer available') ||
+        msg.includes('429') ||
+        msg.includes('rate limit') ||
+        msg.includes('too many requests') ||
+        msg.includes('quota') ||
+        msg.includes('resource_exhausted') ||
+        msg.includes('resource has been exhausted') ||
+        msg.includes('overloaded') ||
+        msg.includes('503')
+      );
+    };
 
     // 1. Primary Gemini
     if (primaryGeminiKey) {
@@ -50,9 +77,8 @@ export class AIManager {
               return res.response.text();
             } catch (err: any) {
               lastErr = err;
-              const msg = (err?.message || '').toLowerCase();
-              if (msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')) {
-                console.warn(`[AIManager] Model ${modelName} unavailable, trying next candidate...`);
+              if (isModelRetryable(err)) {
+                console.warn(`[AIManager] Model ${modelName} hit error (${(err?.message || '').slice(0, 80)}), trying next candidate model...`);
                 continue;
               }
               throw err;
@@ -61,11 +87,24 @@ export class AIManager {
           throw lastErr;
         },
         generateContentStream: async (prompt) => {
-          const model = genAI.getGenerativeModel({
-            model: candidateModels[0],
-            generationConfig: geminiConfig.generationConfig,
-          });
-          return await model.generateContentStream(prompt);
+          let lastErr: any = null;
+          for (const modelName of candidateModels) {
+            try {
+              const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: geminiConfig.generationConfig,
+              });
+              return await model.generateContentStream(prompt);
+            } catch (err: any) {
+              lastErr = err;
+              if (isModelRetryable(err)) {
+                console.warn(`[AIManager] Stream: Model ${modelName} hit error, trying next...`);
+                continue;
+              }
+              throw err;
+            }
+          }
+          throw lastErr;
         }
       });
     }
@@ -87,9 +126,8 @@ export class AIManager {
               return res.response.text();
             } catch (err: any) {
               lastErr = err;
-              const msg = (err?.message || '').toLowerCase();
-              if (msg.includes('404') || msg.includes('not found') || msg.includes('no longer available')) {
-                console.warn(`[AIManager] Model ${modelName} unavailable on secondary, trying next...`);
+              if (isModelRetryable(err)) {
+                console.warn(`[AIManager] Secondary: Model ${modelName} hit error, trying next...`);
                 continue;
               }
               throw err;
@@ -98,11 +136,24 @@ export class AIManager {
           throw lastErr;
         },
         generateContentStream: async (prompt) => {
-          const model = genAI.getGenerativeModel({
-            model: candidateModels[0],
-            generationConfig: geminiConfig.generationConfig,
-          });
-          return await model.generateContentStream(prompt);
+          let lastErr: any = null;
+          for (const modelName of candidateModels) {
+            try {
+              const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: geminiConfig.generationConfig,
+              });
+              return await model.generateContentStream(prompt);
+            } catch (err: any) {
+              lastErr = err;
+              if (isModelRetryable(err)) {
+                console.warn(`[AIManager] Secondary stream: Model ${modelName} hit error, trying next...`);
+                continue;
+              }
+              throw err;
+            }
+          }
+          throw lastErr;
         }
       });
     }
