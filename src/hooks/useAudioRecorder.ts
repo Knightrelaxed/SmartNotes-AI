@@ -77,6 +77,8 @@ interface UseAudioRecorderReturn {
   audioLevel: number;
   engine: 'gemini-live' | 'web-speech';
   isLiveConnected: boolean;
+  getAudioBlob: () => Blob | null;
+  downloadAudio: (filename?: string) => void;
 }
 
 export function useAudioRecorder(): UseAudioRecorderReturn {
@@ -388,6 +390,18 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       });
       streamRef.current = stream;
 
+      // Monitor audio track disconnection (e.g. bluetooth headset unplugged / battery dead)
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.onended = () => {
+          if (!isManuallyStoppedRef.current && useRecordStore.getState().state === 'recording') {
+            console.warn('[useAudioRecorder] Audio track ended unexpectedly (headset/mic disconnected)');
+            setError('Perangkat mikrofon terputus (headset/mic dicabut atau baterai habis). Rekaman dijeda.');
+            pauseRecording();
+          }
+        };
+      }
+
       // Set up native 16kHz audio context for low latency and zero resampling overhead
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioContextClass({ sampleRate: 16000 });
@@ -599,9 +613,24 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     acceptingTranscriptsRef.current = false;
     setIsLiveConnected(false);
 
-    // 3. Stop media recorder
+    // 3. Stop media recorder and ensure complete audio blob is assembled
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      await new Promise<void>((resolve) => {
+        const mr = mediaRecorderRef.current;
+        if (!mr || mr.state === 'inactive') return resolve();
+        const prevOnStop = mr.onstop;
+        mr.onstop = (ev) => {
+          try {
+            prevOnStop?.call(mr, ev);
+          } catch {}
+          resolve();
+        };
+        try {
+          mr.stop();
+        } catch {
+          resolve();
+        }
+      });
     }
 
     // 4. Stop all tracks
@@ -692,7 +721,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     useRecordStore.getState().resumeRecording();
 
     const selectedEngine = useSettingsStore.getState().transcription.engine || 'gemini-live';
-    if (selectedEngine === 'web-speech' && isSpeechSupported) {
+    if (selectedEngine === 'gemini-live') {
+      if (sessionManagerRef.current) {
+        sessionManagerRef.current.ensureConnected().catch((err) => {
+          console.warn('[useAudioRecorder] Error ensuring session connected on resume:', err);
+        });
+      }
+    } else if (selectedEngine === 'web-speech' && isSpeechSupported) {
       startSpeechRecognition();
     }
   }, [monitorAudioLevel, isSpeechSupported, startSpeechRecognition, requestWakeLock]);
@@ -753,6 +788,27 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   const { audioLevel } = useRecordStore();
 
+  const getAudioBlob = useCallback((): Blob | null => {
+    return (mediaRecorderRef.current as any)?.audioBlob || null;
+  }, []);
+
+  const downloadAudio = useCallback((filename?: string) => {
+    const blob = getAudioBlob();
+    if (!blob) {
+      console.warn('[useAudioRecorder] No audio blob available to download.');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'mp4' : 'webm';
+    a.download = filename || `rekaman-smartnotes-${new Date().toISOString().slice(0, 10)}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, [getAudioBlob]);
+
   return {
     isSupported,
     isSpeechSupported,
@@ -764,5 +820,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     audioLevel,
     engine,
     isLiveConnected,
+    getAudioBlob,
+    downloadAudio,
   };
 }

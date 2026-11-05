@@ -245,7 +245,7 @@ export const askQuestionAboutNotes = async (
 
 Catatan:
 """
-${notes.slice(0, 6000)}
+${notes.slice(0, 150000)}
 """
 
 Pertanyaan: ${question}

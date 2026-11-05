@@ -37,6 +37,7 @@ export function RecordPage() {
     error,
     engine,
     isLiveConnected,
+    downloadAudio,
   } = useAudioRecorder();
   const { processNote, correctText, isProcessing: isAIProcessing } = useAI();
   const { saveNoteToCloud, isConfigured: isFirebaseReady } = useFirebase();
@@ -47,11 +48,27 @@ export function RecordPage() {
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   const [showRestoreDraft, setShowRestoreDraft] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(true);
+  const [liveDuration, setLiveDuration] = useState<number>(0);
   const autoSaveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Live timer ticker: guarantees timer ticks smoothly and continuously every 500ms
+  useEffect(() => {
+    if (state !== 'recording') {
+      setLiveDuration(getDuration());
+      return;
+    }
+
+    setLiveDuration(getDuration());
+    const ticker = setInterval(() => {
+      setLiveDuration(getDuration());
+    }, 500);
+
+    return () => clearInterval(ticker);
+  }, [state, getDuration]);
 
   const handleAddBookmark = () => {
     if (state !== 'recording') return;
-    const timeStr = formatDuration(getDuration());
+    const timeStr = formatDuration(liveDuration || getDuration());
     addSegment(`⭐ [POIN PENTING - ${timeStr}]`, true);
     addToast({ type: 'info', message: `Poin penting ditandai (${timeStr})` });
   };
@@ -332,7 +349,7 @@ export function RecordPage() {
       {/* Control Header & Action Bar */}
       <RecordControls
         state={state}
-        duration={getDuration()}
+        duration={liveDuration}
         currentSubject={currentSubject}
         subjects={subjects}
         onSelectSubject={setCurrentSubject}
@@ -355,7 +372,7 @@ export function RecordPage() {
         state={state}
         segments={segments}
         currentText={currentText}
-        duration={getDuration()}
+        duration={liveDuration}
         wordCount={getWordCount()}
         lastAutoSave={lastAutoSave}
         isAIProcessing={isAIProcessing}
@@ -369,11 +386,12 @@ export function RecordPage() {
         onOpenChange={setShowSaveDialog}
         title={noteTitle}
         onChangeTitle={setNoteTitle}
-        duration={getDuration()}
+        duration={liveDuration}
         wordCount={getWordCount()}
         isProcessing={isAIProcessing}
         onDiscard={handleDiscard}
         onSave={handleSave}
+        onDownloadAudio={() => downloadAudio(`${noteTitle || 'rekaman-kuliah'}.webm`)}
       />
     </div>
   );

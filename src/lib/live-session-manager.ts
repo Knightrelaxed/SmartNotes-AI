@@ -17,9 +17,11 @@ export interface LiveSessionManagerOptions {
  * 2. Automatically rotates sessions at the 8.5-minute mark to prevent Google's ~10-minute session timeout.
  * 3. Transparently reconnects on unexpected drops without losing audio chunks.
  * 4. Gracefully flushes audio at stop so trailing sentences are never cut off.
+ * 5. Safely tracks lingering clients during rotations to prevent memory/socket leaks.
  */
 export class LiveSessionManager {
   private activeClient: GeminiLiveClient | null = null;
+  private oldClients: { client: GeminiLiveClient; timer: ReturnType<typeof setTimeout> }[] = [];
   private queue: string[] = [];
   private readonly MAX_QUEUE = 1200; // ~2 minutes of 100ms audio chunks
   private rotationTimer?: ReturnType<typeof setTimeout>;
@@ -42,6 +44,14 @@ export class LiveSessionManager {
     this.retryCount = 0;
     this.clearTimers();
     await this.openSession();
+  }
+
+  public async ensureConnected(): Promise<void> {
+    if (this.isStopped) return;
+    if (!this.activeClient || !this.activeClient.isConnected()) {
+      console.log('[LiveSessionManager] ensureConnected: Re-opening session...');
+      await this.openSession();
+    }
   }
 
   private clearTimers(): void {
@@ -105,9 +115,11 @@ export class LiveSessionManager {
       if (oldClient) {
         try {
           oldClient.sendAudioStreamEnd();
-          setTimeout(() => {
+          const timer = setTimeout(() => {
             oldClient.disconnect();
+            this.oldClients = this.oldClients.filter(c => c.client !== oldClient);
           }, 2000);
+          this.oldClients.push({ client: oldClient, timer });
         } catch (e) {
           console.warn('[LiveSessionManager] Error closing previous session:', e);
         }
@@ -178,6 +190,17 @@ export class LiveSessionManager {
     this.isStopped = true;
     this.clearTimers();
     this.queue = [];
+
+    // Clean up any lingering old clients from rotations
+    for (const item of this.oldClients) {
+      clearTimeout(item.timer);
+      try {
+        item.client.disconnect();
+      } catch {
+        // Ignore
+      }
+    }
+    this.oldClients = [];
 
     const client = this.activeClient;
     this.activeClient = null;

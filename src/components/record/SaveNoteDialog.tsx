@@ -1,4 +1,4 @@
-import { Sparkles, RotateCcw, Save } from 'lucide-react';
+import { Sparkles, RotateCcw, Save, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,6 +21,7 @@ interface SaveNoteDialogProps {
   isProcessing: boolean;
   onDiscard: () => void;
   onSave: () => void;
+  onDownloadAudio?: () => void;
 }
 
 export function SaveNoteDialog({
@@ -33,6 +34,7 @@ export function SaveNoteDialog({
   isProcessing,
   onDiscard,
   onSave,
+  onDownloadAudio,
 }: SaveNoteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,24 +84,40 @@ export function SaveNoteDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            onClick={onDiscard}
-            disabled={isProcessing}
-            className="text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Buang
-          </Button>
-          <Button
-            onClick={onSave}
-            disabled={!title.trim() || isProcessing}
-            className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] text-white"
-          >
-            <Save className="w-4 h-4 mr-2" />
-            {isProcessing ? 'Memproses...' : 'Simpan & Proses AI'}
-          </Button>
+        <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          {onDownloadAudio && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDownloadAudio}
+              className="text-xs text-gray-700 dark:text-gray-300 border-dashed border-gray-300 dark:border-gray-700 hover:text-[#6C63FF] hover:border-[#6C63FF]"
+              title="Unduh rekaman suara asli perkuliahan ke komputer/ponsel"
+            >
+              <Download className="w-3.5 h-3.5 mr-1.5" />
+              Unduh Audio (.webm)
+            </Button>
+          )}
+
+          <div className="flex items-center justify-end gap-2 ml-auto">
+            <Button
+              variant="outline"
+              onClick={onDiscard}
+              disabled={isProcessing}
+              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 text-xs sm:text-sm"
+            >
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+              Buang
+            </Button>
+            <Button
+              onClick={onSave}
+              disabled={!title.trim() || isProcessing}
+              className="bg-gradient-to-r from-[#6C63FF] to-[#5548E8] text-white text-xs sm:text-sm"
+            >
+              <Save className="w-3.5 h-3.5 mr-1.5" />
+              {isProcessing ? 'Memproses...' : 'Simpan & Proses AI'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
